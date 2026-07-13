@@ -216,6 +216,7 @@ const ACCOUNTS=[
   {key:'nelnet',name:'Nelnet — Student Loan',inst:'Nelnet',group:'loan',kind:'loan',begin:-22850,asOf:'2026-05-01'},
 ];
 const acctByKey=Object.fromEntries(ACCOUNTS.map(a=>[a.key,a]));
+const acctName=k=>(acctByKey[k]&&acctByKey[k].name)||k||'Unknown account';
 
 let RULES=[
   {pattern:'KROGER',category:'Groceries'},{pattern:'GIANT EAGLE',category:'Groceries'},{pattern:'WHOLEFDS',category:'Groceries'},{pattern:'COSTCO',category:'Groceries'},
@@ -401,7 +402,7 @@ function vAccounts(){
 function txnTable(list,allowSplit){
   return `<table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="r">Amount</th>${allowSplit?'<th></th>':''}</tr></thead><tbody>${list.map(t=>{
     const hasSplit=!!SPLITS[t.id];
-    let main=`<tr><td class="num">${t.date.slice(5).replace('-','/')}</td><td><span class="haslead">${hasSplit?'⋔':''}</span>${t.desc}<div class="inst">${acctByKey[t.account_key].name}</div></td><td>${t.transfer?'<span class="pill transfer">Transfer</span>':(hasSplit?'<span class="pill">Split</span>':catPill(t.category))}</td><td class="r amtcell">${signed(t.amount)}</td>${allowSplit?`<td class="r"><button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td>`:''}</tr>`;
+    let main=`<tr><td class="num">${t.date.slice(5).replace('-','/')}</td><td><span class="haslead">${hasSplit?'⋔':''}</span>${t.desc}<div class="inst">${acctName(t.account_key)}</div></td><td>${t.transfer?'<span class="pill transfer">Transfer</span>':(hasSplit?'<span class="pill">Split</span>':catPill(t.category))}</td><td class="r amtcell">${signed(t.amount)}</td>${allowSplit?`<td class="r"><button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td>`:''}</tr>`;
     if(hasSplit){main+=SPLITS[t.id].map(l=>`<tr class="splitline"><td></td><td class="lead">↳ ${l.category}</td><td>${l.cls==='capital'?'<span class="cat cap">equity</span>':l.cls==='transfer'?'<span class="pill transfer">transfer</span>':'<span class="cat" style="background:#FBE9E4;color:var(--outflow)">expense</span>'}</td><td class="r num">${money2(l.amount)}</td>${allowSplit?'<td></td>':''}</tr>`).join('');}
     return main;
   }).join('')}</tbody></table>`;
@@ -414,7 +415,7 @@ function filteredTxns(){
     if(TXF.category!=='All' && cat!==TXF.category) return false;
     if(TXF.from && t.date<TXF.from) return false;
     if(TXF.to && t.date>TXF.to) return false;
-    if(TXF.q){const q=TXF.q.toLowerCase();if(!(t.desc.toLowerCase().includes(q)||acctByKey[t.account_key].name.toLowerCase().includes(q)))return false;}
+    if(TXF.q){const q=TXF.q.toLowerCase();if(!(t.desc.toLowerCase().includes(q)||acctName(t.account_key).toLowerCase().includes(q)))return false;}
     return true;
   });
 }
@@ -423,7 +424,7 @@ function txnRows(list){
     const hasSplit=!!SPLITS[t.id];
     let main=`<tr>
       <td class="num" style="width:52px;color:var(--muted);font-size:12px">${t.date.slice(5).replace('-','/')}</td>
-      <td>${hasSplit?'<span class="haslead">⋔</span>':''}${t.desc}<div class="inst">${acctByKey[t.account_key].name}</div></td>
+      <td>${hasSplit?'<span class="haslead">⋔</span>':''}${t.desc}<div class="inst">${acctName(t.account_key)}</div></td>
       <td style="width:170px">${hasSplit?'<span class="pill">Split</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:170px"><option value="">— uncategorized —</option><option value="Transfer" ${t.transfer?'selected':''}>Transfer</option>${CATS.map(c=>`<option ${(!t.transfer&&c===t.category)?'selected':''}>${c}</option>`).join('')}${(!t.transfer&&t.category&&CATS.indexOf(t.category)<0)?`<option selected>${t.category}</option>`:''}</select>`}</td>
       <td class="r amtcell" style="width:100px">${signed(t.amount)}</td>
       <td class="r" style="width:70px"><button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
@@ -478,7 +479,7 @@ function openSplitModal(id){
   function drawM(){
     const allocated=rows.reduce((s,x)=>s+(parseFloat(x.amount)||0),0);const diff=Math.round((t.amount-allocated)*100)/100;
     document.getElementById('modalHost').innerHTML=`<div class="overlay" id="ov"><div class="modal"><div class="mh"><h3>Split payment</h3><button class="close" id="mx">×</button></div><div class="mb">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">${t.desc} · ${acctByKey[t.account_key].name} · <b class="num" style="color:var(--ink)">${money2(t.amount)}</b></div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">${t.desc} · ${acctName(t.account_key)} · <b class="num" style="color:var(--ink)">${money2(t.amount)}</b></div>
       <table><thead><tr><th>Component</th><th>Class</th><th class="r">Amount</th><th></th></tr></thead><tbody>${rows.map((s,i)=>`<tr>
         <td><input type="text" value="${s.category}" data-i="${i}" data-f="category" style="width:100%"></td>
         <td><select data-i="${i}" data-f="cls"><option value="expense" ${s.cls==='expense'?'selected':''}>Expense</option><option value="capital" ${s.cls==='capital'?'selected':''}>Principal / equity</option><option value="transfer" ${s.cls==='transfer'?'selected':''}>Transfer</option></select></td>
@@ -525,7 +526,7 @@ function vNewActivity(){
     ${batches.map(b=>{const net=b.txns.reduce((s,t)=>s+t.amount,0);return `<div class="card batch"><div class="bh"><div class="src"><span class="chip ${chip(b.source)}"></span>${srcName(b.source)}</div><div class="meta">${new Date(b.seenAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${b.txns.length} items</div><div class="num serif ${net<0?'neg':'pos'}" style="font-size:14px">net ${money(net)}</div></div>
       <table><tbody>${b.txns.map(t=>`<tr>
         <td class="num" style="color:var(--muted);font-size:12px;width:50px">${t.date.slice(5).replace('-','/')}</td>
-        <td>${t.desc}<div class="inst">${acctByKey[t.account_key].name}</div></td>
+        <td>${t.desc}<div class="inst">${acctName(t.account_key)}</div></td>
         <td style="width:160px"><select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:160px">${catOpt(t.transfer?'Transfer':t.category)}</select></td>
         <td class="r amtcell" style="width:96px">${signed(t.amount)}</td>
         <td class="r" style="width:96px"><button class="btn sm" data-rev="${t.id}">✓ Reviewed</button></td>
@@ -692,7 +693,10 @@ function renderImport(){
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:10px;flex-wrap:wrap"><div class="inst">Duplicates unchecked by default. Committed rows land in your ledger and appear in New Activity.</div><button class="btn primary" id="impCommit">Commit selected</button></div></div>`;
   window._impRows=rows;
   document.getElementById('impCommit').onclick=()=>{
+    const ak=imp.adapter.accountKey;
+    if(!acctByKey[ak]){alert('Can\u2019t commit: account_key "'+ak+'" is not in your Accounts tab. Add a row for it (account_key '+ak+') in the sheet, reload, then import again.');return;}
     const checks=[...document.querySelectorAll('#impResult .ck')];const sel=checks.filter(c=>c.checked).map(c=>window._impRows[+c.dataset.i]);
+    if(!sel.length){alert('Nothing selected to commit \u2014 all rows may be flagged as duplicates.');return;}
     sel.forEach(r=>{const id=_id++;TXNS.push({id,date:r.date,account_key:imp.adapter.accountKey,desc:r.desc,amount:r.amount,source:'csv:'+document.getElementById('impAcct').value,seenAt:IMPORT_SEEN,category:r.transfer?'Transfer':r.category,transfer:r.transfer,manualCat:!!(r.transfer||r.category)});});
     runRules();TXNS.sort((a,b)=>a.date<b.date?1:-1);imp.rows=[];active='new';window.draw();
   };
