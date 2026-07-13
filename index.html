@@ -406,14 +406,69 @@ function txnTable(list,allowSplit){
     return main;
   }).join('')}</tbody></table>`;
 }
+let TXF={account:'All',category:'All',q:'',from:'',to:''};
+function filteredTxns(){
+  return TXNS.filter(t=>{
+    if(TXF.account!=='All' && t.account_key!==TXF.account) return false;
+    const cat=t.transfer?'Transfer':(t.category||'Uncategorized');
+    if(TXF.category!=='All' && cat!==TXF.category) return false;
+    if(TXF.from && t.date<TXF.from) return false;
+    if(TXF.to && t.date>TXF.to) return false;
+    if(TXF.q){const q=TXF.q.toLowerCase();if(!(t.desc.toLowerCase().includes(q)||acctByKey[t.account_key].name.toLowerCase().includes(q)))return false;}
+    return true;
+  });
+}
+function txnRows(list){
+  return list.map(t=>{
+    const hasSplit=!!SPLITS[t.id];
+    let main=`<tr>
+      <td class="num" style="width:52px;color:var(--muted);font-size:12px">${t.date.slice(5).replace('-','/')}</td>
+      <td>${hasSplit?'<span class="haslead">⋔</span>':''}${t.desc}<div class="inst">${acctByKey[t.account_key].name}</div></td>
+      <td style="width:170px">${t.transfer?'<span class="pill transfer">Transfer</span>':hasSplit?'<span class="pill">Split</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:170px"><option value="">— uncategorized —</option>${CATS.map(c=>`<option ${c===t.category?'selected':''}>${c}</option>`).join('')}${t.category&&CATS.indexOf(t.category)<0?`<option selected>${t.category}</option>`:''}</select>`}</td>
+      <td class="r amtcell" style="width:100px">${signed(t.amount)}</td>
+      <td class="r" style="width:70px"><button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
+    if(hasSplit){main+=SPLITS[t.id].map(l=>`<tr class="splitline"><td></td><td class="lead">↳ ${l.category}</td><td>${l.cls==='capital'?'<span class="cat cap">equity</span>':l.cls==='transfer'?'<span class="pill transfer">transfer</span>':'<span class="cat" style="background:#FBE9E4;color:var(--outflow)">expense</span>'}</td><td class="r num">${money2(l.amount)}</td><td></td></tr>`).join('');}
+    return main;
+  }).join('');
+}
+function wireTxnRows(){
+  document.querySelectorAll('[data-editcat]').forEach(sel=>sel.onchange=()=>{const t=TXNS.find(x=>x.id===+sel.dataset.editcat);t.category=sel.value;t.transfer=(sel.value==='Transfer');t.manualCat=true;persistTxn(t,{category:sel.value});renderTxnTable();});
+  document.querySelectorAll('[data-split]').forEach(b=>b.onclick=()=>openSplitModal(+b.dataset.split));
+}
+function renderTxnTable(){
+  const list=filteredTxns();
+  const inflow=list.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0);
+  const outflow=list.filter(t=>t.amount<0).reduce((s,t)=>s+t.amount,0);
+  const tot=document.getElementById('txnTotals');
+  if(tot)tot.innerHTML=`<span><b>${list.length}</b> transactions</span> &nbsp;·&nbsp; <span class="pos">inflow ${money(inflow)}</span> &nbsp;·&nbsp; <span class="neg">outflow ${money(outflow)}</span> &nbsp;·&nbsp; net <b>${money(inflow+outflow)}</b>`;
+  const body=document.getElementById('txnbody');
+  if(body){ body.innerHTML=txnRows(list); wireTxnRows(); }
+}
 function vTransactions(){
-  const catset=['All',...new Set(TXNS.map(t=>t.transfer?'Transfer':(t.category||'Uncategorized')))];
+  const acctOpts=['All',...ACCOUNTS.map(a=>a.key)];
+  const catset=['All','Uncategorized','Transfer',...CATS];
+  const accountLabel=k=>k==='All'?'All accounts':acctByKey[k].name;
   setTimeout(()=>{
-    const c=document.getElementById('fcat'),q=document.getElementById('fsearch'),b=document.getElementById('txnbody');if(!c)return;
-    const run=()=>{let l=TXNS.filter(t=>t.date.startsWith(current));if(c.value!=='All')l=l.filter(t=>(t.transfer?'Transfer':(t.category||'Uncategorized'))===c.value);const s=q.value.toLowerCase();if(s)l=l.filter(t=>t.desc.toLowerCase().includes(s)||acctByKey[t.account_key].name.toLowerCase().includes(s));b.innerHTML=txnTable(l,true);bindSplit();};
-    c.onchange=run;q.oninput=run;bindSplit();
+    const g=id=>document.getElementById(id);
+    g('fAccount').value=TXF.account; g('fCategory').value=TXF.category; g('fFrom').value=TXF.from; g('fTo').value=TXF.to; g('fVendor').value=TXF.q;
+    g('fAccount').onchange=()=>{TXF.account=g('fAccount').value;renderTxnTable();};
+    g('fCategory').onchange=()=>{TXF.category=g('fCategory').value;renderTxnTable();};
+    g('fFrom').onchange=()=>{TXF.from=g('fFrom').value;renderTxnTable();};
+    g('fTo').onchange=()=>{TXF.to=g('fTo').value;renderTxnTable();};
+    g('fVendor').oninput=()=>{TXF.q=g('fVendor').value;renderTxnTable();};
+    g('fClear').onclick=()=>{TXF={account:'All',category:'All',q:'',from:'',to:''};window.draw();};
+    renderTxnTable();
   },0);
-  return `<div class="filters"><select id="fcat">${catset.map(c=>`<option>${c}</option>`).join('')}</select><input type="text" class="search" id="fsearch" placeholder="Search description or account…" style="min-width:220px"></div><div class="card panel"><div id="txnbody">${txnTable(TXNS.filter(t=>t.date.startsWith(current)),true)}</div></div>`;
+  return `<div class="card panel" style="margin-bottom:14px"><div class="fr" style="margin-bottom:0">
+      <div class="fld" style="min-width:150px"><label>Account</label><select id="fAccount">${acctOpts.map(k=>`<option value="${k}">${accountLabel(k)}</option>`).join('')}</select></div>
+      <div class="fld" style="min-width:140px"><label>Category</label><select id="fCategory">${catset.map(c=>`<option>${c}</option>`).join('')}</select></div>
+      <div class="fld" style="min-width:130px"><label>From</label><input type="date" id="fFrom"></div>
+      <div class="fld" style="min-width:130px"><label>To</label><input type="date" id="fTo"></div>
+      <div class="fld" style="min-width:160px;flex:1.5"><label>Vendor / search</label><input type="text" id="fVendor" placeholder="Kroger, Amazon…"></div>
+      <button class="btn" id="fClear">Clear</button>
+    </div></div>
+    <div class="card panel" style="margin-bottom:12px;padding:12px 18px"><div id="txnTotals" style="font-size:13px;color:var(--text)"></div></div>
+    <div class="card panel"><div style="max-height:560px;overflow:auto"><table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="r">Amount</th><th></th></tr></thead><tbody id="txnbody"></tbody></table></div></div>`;
 }
 function bindSplit(){document.querySelectorAll('[data-split]').forEach(b=>b.onclick=()=>openSplitModal(+b.dataset.split));}
 
@@ -695,7 +750,7 @@ const VIEWS=[
   {id:'flow',label:'Cash Flow',sec:'Reports',crumb:'Reports',month:true,render:vCashflow},
   {id:'cats',label:'Categories',sec:'Reports',crumb:'Reports',month:true,render:vCategories},
   {id:'accts',label:'Accounts',sec:'Ledger',crumb:'Balances',month:false,render:vAccounts},
-  {id:'txns',label:'Transactions',sec:'Ledger',crumb:'Ledger',month:true,render:vTransactions},
+  {id:'txns',label:'Transactions',sec:'Ledger',crumb:'Ledger',month:false,render:vTransactions},
   {id:'wallet',label:'Cash Wallet',sec:'Ledger',crumb:'Ledger',month:true,render:vWallet},
   {id:'new',label:'New Activity',sec:'Ledger',crumb:'Review',month:false,render:vNewActivity,badge:true},
   {id:'rules',label:'Categorization',sec:'Setup',crumb:'Setup',month:false,render:vCategorization},
