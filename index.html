@@ -648,7 +648,7 @@ chase:`Transaction Date,Post Date,Description,Category,Type,Amount
 };
 let imp={headers:[],rows:[],adapter:ADAPTERS.apple,map:{},flip:true};
 function parseCSV(text){const rows=[];let row=[],f='',i=0,q=false;text=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');while(i<text.length){const c=text[i];if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++;}else q=false;}else f+=c;}else{if(c==='"')q=true;else if(c===','){row.push(f);f='';}else if(c==='\n'){row.push(f);rows.push(row);row=[];f='';}else f+=c;}i++;}if(f.length||row.length){row.push(f);rows.push(row);}return rows.filter(r=>r.some(x=>x!==''));}
-const normd=s=>(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+const normd=s=>(s||'').toUpperCase().replace(/^PURCHASE\s+/,'').replace(/[^A-Z0-9]/g,'').slice(0,6);
 function existingKeys(){const set={};TXNS.forEach(t=>{set[t.account_key+'|'+t.date+'|'+Number(t.amount).toFixed(2)+'|'+normd(t.desc)]=true;});return set;}
 function toISO(s){s=(s||'').trim();let m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(m)return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[0];return s;}
 function findCol(cands){for(const c of cands){const i=imp.headers.findIndex(h=>h.toLowerCase().includes(c));if(i>=0)return i;}return -1;}
@@ -682,7 +682,7 @@ function normalizeImport(){
     const cat=(imp.adapter.keepCategory&&imp.map.category>=0)?(r[imp.map.category]||'').trim():'';
     const key=imp.adapter.accountKey+'|'+date+'|'+amt.toFixed(2)+'|'+normd(desc);
     let status=isPay?'transfer':(seen[key]?'dup':'new');
-    return{date,desc,amount:amt,category:cat,transfer:isPay,status};
+    return{date,desc,amount:amt,category:cat,transfer:isPay,status,key};
   }).filter(r=>r.date);
 }
 function renderImport(){
@@ -697,8 +697,15 @@ function renderImport(){
     if(!acctByKey[ak]){alert('Can\u2019t commit: account_key "'+ak+'" is not in your Accounts tab. Add a row for it (account_key '+ak+') in the sheet, reload, then import again.');return;}
     const checks=[...document.querySelectorAll('#impResult .ck')];const sel=checks.filter(c=>c.checked).map(c=>window._impRows[+c.dataset.i]);
     if(!sel.length){alert('Nothing selected to commit \u2014 all rows may be flagged as duplicates.');return;}
-    sel.forEach(r=>{const id=_id++;TXNS.push({id,date:r.date,account_key:imp.adapter.accountKey,desc:r.desc,amount:r.amount,source:'csv:'+document.getElementById('impAcct').value,seenAt:IMPORT_SEEN,category:r.transfer?'Transfer':r.category,transfer:r.transfer,manualCat:!!(r.transfer||r.category)});});
-    runRules();TXNS.sort((a,b)=>a.date<b.date?1:-1);imp.rows=[];active='new';window.draw();
+    const src='csv:'+document.getElementById('impAcct').value;const acct=acctByKey[ak];
+    if(CONFIG.API_URL){
+      const btn=document.getElementById('impCommit');btn.disabled=true;btn.textContent='Saving '+sel.length+'\u2026';
+      const payloadRows=sel.map(r=>({account_key:ak,account_name:acct?acct.name:'',institution:acct?acct.inst:'',posted_date:r.date,amount:r.amount,description:r.desc,category:r.transfer?'Transfer':(r.category||''),source:src,dedup_key:r.key,sync_date:new Date().toISOString(),reviewed:''}));
+      postImport({action:'importTxns',rows:payloadRows}).then(async()=>{imp.rows=[];await loadLive();active='new';window.draw();}).catch(e=>{console.error(e);alert('Import save failed \u2014 see console. Nothing was changed.');btn.disabled=false;btn.textContent='Commit selected';});
+    } else {
+      sel.forEach(r=>{const id=_id++;TXNS.push({id,date:r.date,account_key:ak,desc:r.desc,amount:r.amount,source:src,seenAt:IMPORT_SEEN,category:r.transfer?'Transfer':r.category,transfer:r.transfer,manualCat:!!(r.transfer||r.category)});});
+      runRules();TXNS.sort((a,b)=>a.date<b.date?1:-1);imp.rows=[];active='new';window.draw();
+    }
   };
 }
   function api(action,params){return new Promise((res,rej)=>{const cb='cb'+Math.random().toString(36).slice(2);
@@ -710,11 +717,12 @@ function saveCategory(name){ if(CATS.indexOf(name)<0)CATS.push(name); if(CONFIG.
 function saveRuleCat(i,cat){ if(RULES[i]){const p=RULES[i].pattern;RULES[i].category=cat; if(CONFIG.API_URL)api('updateRuleCat',{pattern:p,category:cat}).catch(e=>console.error('rule save',e));} }
 function removeRule(i){ if(RULES[i]){const p=RULES[i].pattern;RULES.splice(i,1); if(CONFIG.API_URL)api('deleteRule',{pattern:p}).catch(e=>console.error('rule del',e));} }
 function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pattern:P,category:cat}); if(CONFIG.API_URL)api('addRule',{pattern:P,category:cat}).catch(e=>console.error('rule add',e)); }
+  function postImport(payload){return fetch(CONFIG.API_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});}
   function jsonp(name){return new Promise((res,rej)=>{const cb='cb'+Math.random().toString(36).slice(2);
      window[cb]=d=>{res(d);delete window[cb];sc.remove();};const sc=document.createElement('script');
      sc.onerror=()=>rej(new Error('fetch '+name));sc.src=CONFIG.API_URL+'?action=getSheet&name='+name+'&callback='+cb;
      document.body.appendChild(sc);});}
-   const _nd=s=>(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+   const _nd=s=>(s||'').toUpperCase().replace(/^PURCHASE\s+/,'').replace(/[^A-Z0-9]/g,'').slice(0,6);
    async function loadLive(){
      const [tx,ac,ru,bb,asset,av,sp,cat]=await Promise.all(
        ['Transactions','Accounts','Rules','BeginningBalances','Assets','AssetValues','Splits','Categories'].map(jsonp));
