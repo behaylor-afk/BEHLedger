@@ -653,11 +653,13 @@ function jsonp(name){return new Promise((res,rej)=>{const cb='cb'+Math.random().
        VALUED.push({key:r.asset_key,name:r.name,type:r.type,link:r.linked_liability_key||'',history:h.length?h:[['2026-01-01',0]]});});
    }
   async function boot(){
-     if(CONFIG.API_URL){try{await loadLive();}catch(e){console.error(e);
+  if(CONFIG.API_URL){try{await loadLive();}catch(e){console.error(e);
+    document.getElementById('demoBar').textContent='Could not reach the API — check CONFIG.API_URL and the deployment.';}}
+  document.getElementById('demoBar').style.display=CONFIG.API_URL?'none':'block';
+  if(!CONFIG.API_URL)document.getElementById('demoBar').innerHTML='Running on demo data — set CONFIG.API_URL to go live.';
   document.getElementById('footInfo').textContent=CONFIG.API_URL?'Live · updated '+NOW.toLocaleDateString():'Demo · '+ACCOUNTS.length+' accounts';
-boot();
-   }
-
+  renderNav();draw();
+}
 /* ============================================================ ROUTER */
 const VIEWS=[
   {id:'dash',label:'Dashboard',sec:'Reports',crumb:'Overview',month:true,render:vDashboard},
@@ -693,7 +695,6 @@ function draw(){
 window.draw=draw;
 document.getElementById('prev').onclick=()=>{const i=MONTHS.indexOf(current);if(i>0){current=MONTHS[i-1];draw();}};
 document.getElementById('next').onclick=()=>{const i=MONTHS.indexOf(current);if(i<MONTHS.length-1){current=MONTHS[i+1];draw();}};
-document.getElementById('footInfo').textContent=CONFIG.API_URL?'Live · updated '+NOW.toLocaleDateString():'Demo · '+ACCOUNTS.length+' accounts';
 boot();
 </script>
 </body>
