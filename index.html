@@ -183,7 +183,7 @@
 
 <script>
 /* ============================================================ CONFIG */
-const CONFIG={API_URL:'https://script.google.com/macros/s/AKfycbw_ihVQIQWmVrLssQvFrMOWu2K2YHTt-ZBoVKKPxmKRU4CMi3dj6oiMao4cVi-HyWSi9g/exec'};
+const CONFIG={API_URL:'https://script.google.com/macros/s/AKfycbwC4NYnpimCWaM11bCeDjQGToA668lOTrXm6V9L2MQ5g8GUibusfYgPZMmyUCuzXhJxMw/exec'};
 
 /* ============================================================ DATA MODEL */
 const MONTHS=['2026-05','2026-06','2026-07'];
@@ -444,22 +444,37 @@ function openSplitModal(id){
 }
 
 function vNewActivity(){
+  const isNew=t=>new Date(t.seenAt)>watermark && !t.reviewed;
   const groups={};
-  TXNS.forEach(t=>{const s=new Date(t.seenAt);if(!(s>watermark))return;const key=t.source+'@'+t.seenAt;(groups[key]=groups[key]||{source:t.source,seenAt:t.seenAt,txns:[]}).txns.push(t);});
-  const batches=Object.values(groups).sort((a,b)=>new Date(b.seenAt)-new Date(a.seenAt));const all=batches.flatMap(b=>b.txns);
-  if(!all.length) return `<div class="card panel" style="text-align:center;padding:48px"><div class="serif" style="font-size:20px;color:var(--ink);margin-bottom:6px">You're all caught up</div><div style="font-size:13px;color:var(--muted)">Last reviewed ${watermark.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}. New activity collects here after each sync or import.</div></div>`;
-  const inflow=all.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0),outflow=all.filter(t=>t.amount<0).reduce((s,t)=>s+t.amount,0);const need=all.filter(t=>!t.category&&!t.transfer).length;
-  const srcName=s=>s==='simplefin'?'SimpleFIN sync':s==='csv:apple'?'Apple Card import':s.indexOf('csv:')===0?'CSV import ('+s.slice(4)+')':s==='manual'?'Manual entry':'Import';
+  TXNS.forEach(t=>{if(!isNew(t))return;const key=t.source+'@'+t.seenAt;(groups[key]=groups[key]||{source:t.source,seenAt:t.seenAt,txns:[]}).txns.push(t);});
+  const batches=Object.values(groups).sort((a,b)=>new Date(b.seenAt)-new Date(a.seenAt));
+  const all=batches.flatMap(b=>b.txns);
+  if(!all.length) return `<div class="card panel" style="text-align:center;padding:48px"><div class="serif" style="font-size:20px;color:var(--ink);margin-bottom:6px">You're all caught up</div><div style="font-size:13px;color:var(--muted)">Nothing left to review. New activity collects here after each sync or import.</div></div>`;
+  const inflow=all.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0),outflow=all.filter(t=>t.amount<0).reduce((s,t)=>s+t.amount,0);
+  const need=all.filter(t=>!t.category&&!t.transfer).length;
+  const srcName=s=>s==='simplefin'?'SimpleFIN sync':s==='csv:apple'?'Apple Card import':s&&s.indexOf('csv:')===0?'CSV import ('+s.slice(4)+')':s==='manual'?'Manual entry':'Import';
   const chip=s=>s==='simplefin'?'sf':s==='manual'?'man':'csv';
-  setTimeout(()=>{const b=document.getElementById('markBtn');if(b)b.onclick=()=>{watermark=new Date(NOW);window.draw();};},0);
+  const catOpt=cur=>{const o=CATS.slice();if(cur&&o.indexOf(cur)<0)o.unshift(cur);return `<option value="">— uncategorized —</option>`+o.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');};
+  setTimeout(()=>{
+    document.getElementById('markBtn').onclick=()=>{all.forEach(t=>{t.reviewed=true;persistTxn(t,{reviewed:true});});window.draw();};
+    document.querySelectorAll('[data-rev]').forEach(b=>b.onclick=()=>{const t=TXNS.find(x=>x.id===+b.dataset.rev);t.reviewed=true;persistTxn(t,{reviewed:true});window.draw();});
+    document.querySelectorAll('[data-editcat]').forEach(sel=>sel.onchange=()=>{const t=TXNS.find(x=>x.id===+sel.dataset.editcat);t.category=sel.value;t.transfer=(sel.value==='Transfer');t.manualCat=true;persistTxn(t,{category:sel.value});window.draw();});
+  },0);
   return `<div class="grid-kpi" style="grid-template-columns:repeat(5,1fr)">
-    <div class="card kpi"><div class="k-lbl">New items</div><div class="k-val num">${all.length}</div></div>
+    <div class="card kpi"><div class="k-lbl">To review</div><div class="k-val num">${all.length}</div></div>
     <div class="card kpi"><div class="k-lbl">Inflow</div><div class="k-val num pos">${money(inflow)}</div></div>
     <div class="card kpi"><div class="k-lbl">Outflow</div><div class="k-val num neg">${money(outflow)}</div></div>
     <div class="card kpi"><div class="k-lbl">Net</div><div class="k-val num ${inflow+outflow<0?'neg':'pos'}">${money(inflow+outflow)}</div></div>
-    <div class="card kpi"><div class="k-lbl">Need review</div><div class="k-val num" style="color:${need?'var(--warn)':'inherit'}">${need}</div></div></div>
+    <div class="card kpi"><div class="k-lbl">Uncategorized</div><div class="k-val num" style="color:${need?'var(--warn)':'inherit'}">${need}</div></div></div>
     <div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn brass" id="markBtn">✓ Mark all reviewed</button></div>
-    ${batches.map(b=>{const net=b.txns.reduce((s,t)=>s+t.amount,0);return `<div class="card batch"><div class="bh"><div class="src"><span class="chip ${chip(b.source)}"></span>${srcName(b.source)}</div><div class="meta">${new Date(b.seenAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${b.txns.length} items</div><div class="num serif ${net<0?'neg':'pos'}" style="font-size:14px">net ${money(net)}</div></div><table><tbody>${b.txns.map(t=>`<tr><td class="num" style="color:var(--muted);font-size:12px">${t.date.slice(5).replace('-','/')}</td><td>${t.desc}<div class="inst">${acctByKey[t.account_key].name}</div></td><td>${t.transfer?'<span class="pill transfer">Transfer</span>':(t.category?catPill(t.category):'<span class="need">Needs review</span>')}</td><td class="r amtcell">${signed(t.amount)}</td></tr>`).join('')}</tbody></table></div>`;}).join('')}`;
+    ${batches.map(b=>{const net=b.txns.reduce((s,t)=>s+t.amount,0);return `<div class="card batch"><div class="bh"><div class="src"><span class="chip ${chip(b.source)}"></span>${srcName(b.source)}</div><div class="meta">${new Date(b.seenAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${b.txns.length} items</div><div class="num serif ${net<0?'neg':'pos'}" style="font-size:14px">net ${money(net)}</div></div>
+      <table><tbody>${b.txns.map(t=>`<tr>
+        <td class="num" style="color:var(--muted);font-size:12px;width:50px">${t.date.slice(5).replace('-','/')}</td>
+        <td>${t.desc}<div class="inst">${acctByKey[t.account_key].name}</div></td>
+        <td style="width:160px">${t.transfer?'<span class="pill transfer">Transfer</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:160px">${catOpt(t.category)}</select>`}</td>
+        <td class="r amtcell" style="width:96px">${signed(t.amount)}</td>
+        <td class="r" style="width:96px"><button class="btn sm" data-rev="${t.id}">✓ Reviewed</button></td>
+      </tr>`).join('')}</tbody></table></div>`;}).join('')}`;
 }
 function vCategorization(){
   const uncategorized=TXNS.filter(t=>!t.category&&!t.transfer);const distinct=[...new Set(uncategorized.map(t=>t.desc))];
@@ -603,6 +618,11 @@ function renderImport(){
     runRules();TXNS.sort((a,b)=>a.date<b.date?1:-1);imp.rows=[];active='new';window.draw();
   };
 }
+  function api(action,params){return new Promise((res,rej)=>{const cb='cb'+Math.random().toString(36).slice(2);
+  window[cb]=d=>{res(d);delete window[cb];sc.remove();};const sc=document.createElement('script');
+  sc.onerror=()=>rej(new Error(action));const q=Object.entries(params||{}).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+  sc.src=CONFIG.API_URL+'?action='+action+(q?'&'+q:'')+'&callback='+cb;document.body.appendChild(sc);});}
+function persistTxn(t,changes){ if(!CONFIG.API_URL||!t.dedup_key)return; api('updateTxn',Object.assign({key:t.dedup_key},changes)).catch(e=>console.error('save failed',e)); }
 function jsonp(name){return new Promise((res,rej)=>{const cb='cb'+Math.random().toString(36).slice(2);
      window[cb]=d=>{res(d);delete window[cb];sc.remove();};const sc=document.createElement('script');
      sc.onerror=()=>rej(new Error('fetch '+name));sc.src=CONFIG.API_URL+'?action=getSheet&name='+name+'&callback='+cb;
@@ -622,7 +642,8 @@ function jsonp(name){return new Promise((res,rej)=>{const cb='cb'+Math.random().
      RULES=ru.map(r=>({pattern:String(r.pattern),category:r.category}));
      TXNS=tx.map((r,i)=>({id:i,date:String(r.posted_date).slice(0,10),account_key:r.account_key,desc:r.description,
        amount:Number(r.amount),source:r.source,seenAt:r.sync_date,category:r.category||'',
-       transfer:r.category==='Transfer',manualCat:true}));
+       transfer:r.category==='Transfer',manualCat:true,
+       dedup_key:r.dedup_key,reviewed:(r.reviewed==='yes'||r.reviewed===true)}));
      const keyOf=t=>t.account_key+'|'+t.date+'|'+Number(t.amount).toFixed(2)+'|'+_nd(t.desc);
      const byKey={};TXNS.forEach(t=>byKey[keyOf(t)]=t.id);
      SPLITS={};sp.forEach(r=>{const base=String(r.parent_dedup_key).split('|').slice(0,4).join('|');
@@ -631,12 +652,10 @@ function jsonp(name){return new Promise((res,rej)=>{const cb='cb'+Math.random().
      VALUED.length=0;asset.forEach(r=>{const h=(hist[r.asset_key]||[]).sort((a,b)=>a[0]<b[0]?-1:1);
        VALUED.push({key:r.asset_key,name:r.name,type:r.type,link:r.linked_liability_key||'',history:h.length?h:[['2026-01-01',0]]});});
    }
-   async function boot(){
+  async function boot(){
      if(CONFIG.API_URL){try{await loadLive();}catch(e){console.error(e);
-       document.getElementById('demoBar').textContent='Could not reach the API — check CONFIG.API_URL and the deployment.';}}
-     document.getElementById('demoBar').style.display=CONFIG.API_URL?'none':'block';
-     if(!CONFIG.API_URL)document.getElementById('demoBar').innerHTML='Running on demo data — set CONFIG.API_URL to go live.';
-     renderNav();draw();
+  document.getElementById('footInfo').textContent=CONFIG.API_URL?'Live · updated '+NOW.toLocaleDateString():'Demo · '+ACCOUNTS.length+' accounts';
+boot();
    }
 
 /* ============================================================ ROUTER */
@@ -654,7 +673,7 @@ const VIEWS=[
   {id:'prop',label:'Property & Assets',sec:'Setup',crumb:'Setup',month:false,render:vProperty},
 ];
 let active='dash';
-function newCount(){let n=0;TXNS.forEach(t=>{if(new Date(t.seenAt)>watermark)n++;});return n;}
+function newCount(){let n=0;TXNS.forEach(t=>{if(new Date(t.seenAt)>watermark&&!t.reviewed)n++;});return n;}
 function renderNav(){
   const secs=[...new Set(VIEWS.map(v=>v.sec))];
   document.getElementById('nav').innerHTML=secs.map(sec=>`<div class="navsec">${sec}</div>`+VIEWS.filter(v=>v.sec===sec).map(v=>`<button class="nav-item ${v.id===active?'active':''}" data-id="${v.id}">${v.label}${v.badge&&newCount()?`<span class="badge">${newCount()}</span>`:''}</button>`).join('')).join('');
