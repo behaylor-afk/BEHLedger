@@ -633,7 +633,10 @@ function jsonp(name){return new Promise((res,rej)=>{const cb='cb'+Math.random().
    }
    async function boot(){
      if(CONFIG.API_URL){try{await loadLive();}catch(e){console.error(e);
-      boot();
+       document.getElementById('demoBar').textContent='Could not reach the API — check CONFIG.API_URL and the deployment.';}}
+     document.getElementById('demoBar').style.display=CONFIG.API_URL?'none':'block';
+     if(!CONFIG.API_URL)document.getElementById('demoBar').innerHTML='Running on demo data — set CONFIG.API_URL to go live.';
+     renderNav();draw();
    }
 
 /* ============================================================ ROUTER */
@@ -671,10 +674,8 @@ function draw(){
 window.draw=draw;
 document.getElementById('prev').onclick=()=>{const i=MONTHS.indexOf(current);if(i>0){current=MONTHS[i-1];draw();}};
 document.getElementById('next').onclick=()=>{const i=MONTHS.indexOf(current);if(i<MONTHS.length-1){current=MONTHS[i+1];draw();}};
-document.getElementById('demoBar').innerHTML=CONFIG.API_URL?'':'Running on demo data — set <code>CONFIG.API_URL</code> to your Apps Script /exec URL to go live.';
-document.getElementById('demoBar').style.display=CONFIG.API_URL?'none':'block';
 document.getElementById('footInfo').textContent=CONFIG.API_URL?'Live · updated '+NOW.toLocaleDateString():'Demo · '+ACCOUNTS.length+' accounts';
-renderNav();draw();
+boot();
 </script>
 </body>
 </html>
