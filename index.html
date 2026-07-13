@@ -477,13 +477,37 @@ function vNewActivity(){
       </tr>`).join('')}</tbody></table></div>`;}).join('')}`;
 }
 function vCategorization(){
-  const uncategorized=TXNS.filter(t=>!t.category&&!t.transfer);const distinct=[...new Set(uncategorized.map(t=>t.desc))];
-  const done=TXNS.filter(t=>t.category||t.transfer).length,pct=Math.round(done/TXNS.length*100);
-  setTimeout(()=>{document.querySelectorAll('[data-assign]').forEach(s=>s.onchange=()=>{const desc=s.dataset.assign,c=s.value;if(!c)return;const tok=(desc.split(/[ *#0-9]/)[0]||desc).toUpperCase();RULES.unshift({pattern:tok,category:c});runRules();window.draw();});},0);
-  return `<div class="card panel"><h3>Coverage</h3><div style="display:flex;align-items:center;gap:14px"><div class="serif num" style="font-size:26px;color:var(--ink)">${pct}%</div><div style="flex:1"><div class="track" style="height:9px"><div class="fillbar" style="background:var(--inflow);width:${pct}%"></div></div></div><div style="font-size:12.5px;color:var(--muted)">${done} of ${TXNS.length} · ${RULES.length} rules</div></div></div>
+  const done=TXNS.filter(t=>t.category||t.transfer).length,pct=TXNS.length?Math.round(done/TXNS.length*100):0;
+  const catSelect=(cur,attr)=>`<select ${attr}>${CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('')}<option value="__add__">＋ add new…</option></select>`;
+  setTimeout(()=>{
+    document.querySelectorAll('[data-rulecat]').forEach(sel=>sel.onchange=()=>{
+      const i=+sel.dataset.rulecat;
+      if(sel.value==='__add__'){const name=(prompt('New category name')||'').trim();if(!name){window.draw();return;}saveCategory(name);saveRuleCat(i,name);window.draw();return;}
+      saveRuleCat(i,sel.value);window.draw();
+    });
+    document.querySelectorAll('[data-ruledel]').forEach(b=>b.onclick=()=>{removeRule(+b.dataset.ruledel);window.draw();});
+    const ap=document.getElementById('newRulePattern'),ac=document.getElementById('newRuleCat'),ab=document.getElementById('addRuleBtn');
+    if(ab)ab.onclick=()=>{const p=(ap.value||'').trim();if(!p)return;let cat=ac.value;if(cat==='__add__'){cat=(prompt('New category name')||'').trim();if(!cat)return;saveCategory(cat);}saveNewRule(p,cat);ap.value='';window.draw();};
+    const ci=document.getElementById('newCatName'),cb=document.getElementById('addCatBtn');
+    if(cb)cb.onclick=()=>{const n=(ci.value||'').trim();if(!n)return;saveCategory(n);ci.value='';window.draw();};
+  },0);
+  return `<div class="card panel"><h3>Coverage</h3><div style="display:flex;align-items:center;gap:14px"><div class="serif num" style="font-size:26px;color:var(--ink)">${pct}%</div><div style="flex:1"><div class="track" style="height:9px"><div class="fillbar" style="background:var(--inflow);width:${pct}%"></div></div></div><div style="font-size:12.5px;color:var(--muted)">${done} of ${TXNS.length} categorized · ${RULES.length} rules · ${CATS.length} categories</div></div></div>
   <div class="cols" style="margin-top:14px">
-    <div class="card panel"><h3>Rule table <span class="hint">${RULES.length}</span></h3><div style="max-height:340px;overflow:auto"><table><thead><tr><th>Pattern</th><th>Category</th></tr></thead><tbody>${RULES.map(r=>`<tr><td class="serif">${r.pattern}</td><td>${catPill(r.category)}</td></tr>`).join('')}</tbody></table></div></div>
-    <div class="card panel"><h3>Needs review <span class="hint">${distinct.length} merchants</span></h3>${distinct.length?distinct.map(desc=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)"><div style="font-size:13px">${desc}</div><select data-assign="${desc}" style="font-size:12px"><option value="">— assign & learn —</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>`).join(''):'<div style="font-size:13px;color:var(--muted)">Everything is categorized.</div>'}<div style="font-size:11.5px;color:var(--muted);margin-top:12px">Assigning adds a rule and re-runs — the ledger recategorizes and every report updates.</div></div>
+    <div class="card panel"><h3>Rule table <span class="hint">${RULES.length}</span></h3>
+      <div style="max-height:360px;overflow:auto"><table><thead><tr><th>Pattern</th><th>Category</th><th></th></tr></thead><tbody>
+      ${RULES.map((r,i)=>`<tr><td class="serif">${r.pattern}</td><td>${catSelect(r.category,'data-rulecat="'+i+'" style="font-size:12px;padding:5px 8px;max-width:170px"')}</td><td class="r"><button class="splitbtn" data-ruledel="${i}">×</button></td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="fr" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+        <div class="fld"><label>New rule — pattern</label><input type="text" id="newRulePattern" placeholder="e.g. TRADER JOE"></div>
+        <div class="fld"><label>Category</label>${catSelect(CATS[0],'id="newRuleCat" style="font-size:12px;padding:7px 9px"')}</div>
+        <button class="btn brass" id="addRuleBtn">Add rule</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">Rules govern how new synced transactions get categorized. To fix an existing transaction, use New Activity.</div>
+    </div>
+    <div class="card panel"><h3>Categories <span class="hint">${CATS.length}</span></h3>
+      <div class="fr"><div class="fld"><label>Add a category</label><input type="text" id="newCatName" placeholder="e.g. Vacation"></div><button class="btn brass" id="addCatBtn">Add</button></div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${CATS.map(c=>`<span class="pill">${c}</span>`).join('')}</div>
+    </div>
   </div>`;
 }
 function vBeginning(){
@@ -623,14 +647,18 @@ function renderImport(){
   sc.onerror=()=>rej(new Error(action));const q=Object.entries(params||{}).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
   sc.src=CONFIG.API_URL+'?action='+action+(q?'&'+q:'')+'&callback='+cb;document.body.appendChild(sc);});}
 function persistTxn(t,changes){ if(!CONFIG.API_URL||!t.dedup_key)return; api('updateTxn',Object.assign({key:t.dedup_key},changes)).catch(e=>console.error('save failed',e)); }
-function jsonp(name){return new Promise((res,rej)=>{const cb='cb'+Math.random().toString(36).slice(2);
+function saveCategory(name){ if(CATS.indexOf(name)<0)CATS.push(name); if(CONFIG.API_URL)api('addCategory',{name:name}).catch(e=>console.error('cat save',e)); }
+function saveRuleCat(i,cat){ if(RULES[i]){const p=RULES[i].pattern;RULES[i].category=cat; if(CONFIG.API_URL)api('updateRuleCat',{pattern:p,category:cat}).catch(e=>console.error('rule save',e));} }
+function removeRule(i){ if(RULES[i]){const p=RULES[i].pattern;RULES.splice(i,1); if(CONFIG.API_URL)api('deleteRule',{pattern:p}).catch(e=>console.error('rule del',e));} }
+function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pattern:P,category:cat}); if(CONFIG.API_URL)api('addRule',{pattern:P,category:cat}).catch(e=>console.error('rule add',e)); }
+  function jsonp(name){return new Promise((res,rej)=>{const cb='cb'+Math.random().toString(36).slice(2);
      window[cb]=d=>{res(d);delete window[cb];sc.remove();};const sc=document.createElement('script');
      sc.onerror=()=>rej(new Error('fetch '+name));sc.src=CONFIG.API_URL+'?action=getSheet&name='+name+'&callback='+cb;
      document.body.appendChild(sc);});}
    const _nd=s=>(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
    async function loadLive(){
-     const [tx,ac,ru,bb,asset,av,sp]=await Promise.all(
-       ['Transactions','Accounts','Rules','BeginningBalances','Assets','AssetValues','Splits'].map(jsonp));
+     const [tx,ac,ru,bb,asset,av,sp,cat]=await Promise.all(
+       ['Transactions','Accounts','Rules','BeginningBalances','Assets','AssetValues','Splits','Categories'].map(jsonp));
      const anchor=Object.fromEntries(bb.map(r=>[r.account_key,r]));
      ACCOUNTS.length=0;
      ac.forEach(r=>{const a=anchor[r.account_key]||{};const manual=(!r.simplefin_id&&(r.type==='card'||r.type==='wallet'));
@@ -640,6 +668,7 @@ function jsonp(name){return new Promise((res,rej)=>{const cb='cb'+Math.random().
          begin:Number(a.beginning_balance)||0,asOf:String(a.as_of_date||'').slice(0,10),feed:Number(r.balance)});});
      Object.keys(acctByKey).forEach(k=>delete acctByKey[k]);ACCOUNTS.forEach(a=>acctByKey[a.key]=a);
      RULES=ru.map(r=>({pattern:String(r.pattern),category:r.category}));
+     (cat||[]).forEach(r=>{const c=r.category;if(c&&CATS.indexOf(c)<0)CATS.push(c);});
      TXNS=tx.map((r,i)=>({id:i,date:String(r.posted_date).slice(0,10),account_key:r.account_key,desc:r.description,
        amount:Number(r.amount),source:r.source,seenAt:r.sync_date,category:r.category||'',
        transfer:r.category==='Transfer',manualCat:true,
