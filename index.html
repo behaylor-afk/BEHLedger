@@ -424,7 +424,7 @@ function txnRows(list){
     let main=`<tr>
       <td class="num" style="width:52px;color:var(--muted);font-size:12px">${t.date.slice(5).replace('-','/')}</td>
       <td>${hasSplit?'<span class="haslead">⋔</span>':''}${t.desc}<div class="inst">${acctByKey[t.account_key].name}</div></td>
-      <td style="width:170px">${t.transfer?'<span class="pill transfer">Transfer</span>':hasSplit?'<span class="pill">Split</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:170px"><option value="">— uncategorized —</option>${CATS.map(c=>`<option ${c===t.category?'selected':''}>${c}</option>`).join('')}${t.category&&CATS.indexOf(t.category)<0?`<option selected>${t.category}</option>`:''}</select>`}</td>
+      <td style="width:170px">${hasSplit?'<span class="pill">Split</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:170px"><option value="">— uncategorized —</option><option value="Transfer" ${t.transfer?'selected':''}>Transfer</option>${CATS.map(c=>`<option ${(!t.transfer&&c===t.category)?'selected':''}>${c}</option>`).join('')}${(!t.transfer&&t.category&&CATS.indexOf(t.category)<0)?`<option selected>${t.category}</option>`:''}</select>`}</td>
       <td class="r amtcell" style="width:100px">${signed(t.amount)}</td>
       <td class="r" style="width:70px"><button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
     if(hasSplit){main+=SPLITS[t.id].map(l=>`<tr class="splitline"><td></td><td class="lead">↳ ${l.category}</td><td>${l.cls==='capital'?'<span class="cat cap">equity</span>':l.cls==='transfer'?'<span class="pill transfer">transfer</span>':'<span class="cat" style="background:#FBE9E4;color:var(--outflow)">expense</span>'}</td><td class="r num">${money2(l.amount)}</td><td></td></tr>`).join('');}
@@ -509,7 +509,7 @@ function vNewActivity(){
   const need=all.filter(t=>!t.category&&!t.transfer).length;
   const srcName=s=>s==='simplefin'?'SimpleFIN sync':s==='csv:apple'?'Apple Card import':s&&s.indexOf('csv:')===0?'CSV import ('+s.slice(4)+')':s==='manual'?'Manual entry':'Import';
   const chip=s=>s==='simplefin'?'sf':s==='manual'?'man':'csv';
-  const catOpt=cur=>{const o=CATS.slice();if(cur&&o.indexOf(cur)<0)o.unshift(cur);return `<option value="">— uncategorized —</option>`+o.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');};
+  const catOpt=cur=>{const o=CATS.slice();if(o.indexOf('Transfer')<0)o.unshift('Transfer');if(cur&&o.indexOf(cur)<0)o.unshift(cur);return `<option value="">— uncategorized —</option>`+o.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');};
   setTimeout(()=>{
     document.getElementById('markBtn').onclick=()=>{all.forEach(t=>{t.reviewed=true;persistTxn(t,{reviewed:true});});window.draw();};
     document.querySelectorAll('[data-rev]').forEach(b=>b.onclick=()=>{const t=TXNS.find(x=>x.id===+b.dataset.rev);t.reviewed=true;persistTxn(t,{reviewed:true});window.draw();});
@@ -526,7 +526,7 @@ function vNewActivity(){
       <table><tbody>${b.txns.map(t=>`<tr>
         <td class="num" style="color:var(--muted);font-size:12px;width:50px">${t.date.slice(5).replace('-','/')}</td>
         <td>${t.desc}<div class="inst">${acctByKey[t.account_key].name}</div></td>
-        <td style="width:160px">${t.transfer?'<span class="pill transfer">Transfer</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:160px">${catOpt(t.category)}</select>`}</td>
+        <td style="width:160px"><select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:160px">${catOpt(t.transfer?'Transfer':t.category)}</select></td>
         <td class="r amtcell" style="width:96px">${signed(t.amount)}</td>
         <td class="r" style="width:96px"><button class="btn sm" data-rev="${t.id}">✓ Reviewed</button></td>
       </tr>`).join('')}</tbody></table></div>`;}).join('')}`;
