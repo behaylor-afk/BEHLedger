@@ -183,11 +183,11 @@
 
 <script>
 /* ============================================================ CONFIG */
-const CONFIG={API_URL:'https://script.google.com/macros/s/AKfycbwC4NYnpimCWaM11bCeDjQGToA668lOTrXm6V9L2MQ5g8GUibusfYgPZMmyUCuzXhJxMw/exec'};
+const CONFIG={API_URL:'https://script.google.com/macros/s/AKfycbyH0mol87BcdHnxMR9eRvZFzL-h4SSGkSYiCI4n9nUD3CvcOovX7OzDe64kxZMy75vQtw/exec'}; /* <-- After deploying the new Tiller-bound Apps Script (see instructions), paste its /exec URL between these quotes. */
 
 /* ============================================================ DATA MODEL */
-const MONTHS=['2026-05','2026-06','2026-07'];
-const MONTH_NAMES={'2026-05':'May 2026','2026-06':'June 2026','2026-07':'July 2026'};
+let MONTHS=['2026-05','2026-06','2026-07'];
+let MONTH_NAMES={'2026-05':'May 2026','2026-06':'June 2026','2026-07':'July 2026'};
 let current='2026-07';
 let watermark=new Date('2026-07-05T08:12:00');
 const NOW=new Date('2026-07-12T14:30:00');
@@ -195,6 +195,7 @@ const IMPORT_SEEN='2026-07-12T10:30:00';
 
 const CAPITAL_CATEGORIES=['Mortgage Principal','Loan Principal','Investment Contribution'];
 const INCOME=new Set(['Consulting Income','Interest Income']);
+let TRANSFER_CATS=new Set();
 const CATS=['Groceries','Dining','Gas & Auto','Shopping','Subscriptions','Utilities','Housing','Mortgage Interest','Real Estate Tax','Homeowners Insurance','Loan Payment','Childcare','Insurance','Healthcare','Entertainment','Travel','Transportation','Bank Fee','Cash Spending','Consulting Income','Interest Income'];
 
 const ACCOUNTS=[
@@ -433,7 +434,7 @@ function txnRows(list){
   }).join('');
 }
 function wireTxnRows(){
-  document.querySelectorAll('[data-editcat]').forEach(sel=>sel.onchange=()=>{const t=TXNS.find(x=>x.id===+sel.dataset.editcat);t.category=sel.value;t.transfer=(sel.value==='Transfer');t.manualCat=true;persistTxn(t,{category:sel.value});renderTxnTable();});
+  document.querySelectorAll('[data-editcat]').forEach(sel=>sel.onchange=()=>{const t=TXNS.find(x=>x.id===+sel.dataset.editcat);t.category=sel.value;t.transfer=(sel.value==='Transfer'||TRANSFER_CATS.has(sel.value));t.manualCat=true;persistTxn(t,{category:sel.value});renderTxnTable();});
   document.querySelectorAll('[data-split]').forEach(b=>b.onclick=()=>openSplitModal(+b.dataset.split));
 }
 function renderTxnTable(){
@@ -514,7 +515,7 @@ function vNewActivity(){
   setTimeout(()=>{
     document.getElementById('markBtn').onclick=()=>{all.forEach(t=>{t.reviewed=true;persistTxn(t,{reviewed:true});});window.draw();};
     document.querySelectorAll('[data-rev]').forEach(b=>b.onclick=()=>{const t=TXNS.find(x=>x.id===+b.dataset.rev);t.reviewed=true;persistTxn(t,{reviewed:true});window.draw();});
-    document.querySelectorAll('[data-editcat]').forEach(sel=>sel.onchange=()=>{const t=TXNS.find(x=>x.id===+sel.dataset.editcat);t.category=sel.value;t.transfer=(sel.value==='Transfer');t.manualCat=true;persistTxn(t,{category:sel.value});window.draw();});
+    document.querySelectorAll('[data-editcat]').forEach(sel=>sel.onchange=()=>{const t=TXNS.find(x=>x.id===+sel.dataset.editcat);t.category=sel.value;t.transfer=(sel.value==='Transfer'||TRANSFER_CATS.has(sel.value));t.manualCat=true;persistTxn(t,{category:sel.value});window.draw();});
   },0);
   return `<div class="grid-kpi" style="grid-template-columns:repeat(5,1fr)">
     <div class="card kpi"><div class="k-lbl">To review</div><div class="k-val num">${all.length}</div></div>
@@ -712,8 +713,8 @@ function renderImport(){
   window[cb]=d=>{res(d);delete window[cb];sc.remove();};const sc=document.createElement('script');
   sc.onerror=()=>rej(new Error(action));const q=Object.entries(params||{}).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
   sc.src=CONFIG.API_URL+'?action='+action+(q?'&'+q:'')+'&callback='+cb;document.body.appendChild(sc);});}
-function persistTxn(t,changes){ if(!CONFIG.API_URL||!t.dedup_key)return; api('updateTxn',Object.assign({key:t.dedup_key},changes)).catch(e=>console.error('save failed',e)); }
-function saveCategory(name){ if(CATS.indexOf(name)<0)CATS.push(name); if(CONFIG.API_URL)api('addCategory',{name:name}).catch(e=>console.error('cat save',e)); }
+function persistTxn(t,changes){ if(!CONFIG.API_URL||!t.txnId||changes.category===undefined)return; api('setCategory',{txnId:t.txnId,category:changes.category}).catch(e=>console.error('save failed',e)); }
+function saveCategory(name){ if(CATS.indexOf(name)<0)CATS.push(name); if(CONFIG.API_URL)api('addCategory',{name:name,type:'Expense',group:'Uncategorized'}).catch(e=>console.error('cat save',e)); }
 function saveRuleCat(i,cat){ if(RULES[i]){const p=RULES[i].pattern;RULES[i].category=cat; if(CONFIG.API_URL)api('updateRuleCat',{pattern:p,category:cat}).catch(e=>console.error('rule save',e));} }
 function removeRule(i){ if(RULES[i]){const p=RULES[i].pattern;RULES.splice(i,1); if(CONFIG.API_URL)api('deleteRule',{pattern:p}).catch(e=>console.error('rule del',e));} }
 function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pattern:P,category:cat}); if(CONFIG.API_URL)api('addRule',{pattern:P,category:cat}).catch(e=>console.error('rule add',e)); }
@@ -724,29 +725,39 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
      document.body.appendChild(sc);});}
    const _nd=s=>(s||'').toUpperCase().replace(/^PURCHASE\s+/,'').replace(/[^A-Z0-9]/g,'').slice(0,6);
    async function loadLive(){
-     const [tx,ac,ru,bb,asset,av,sp,cat]=await Promise.all(
-       ['Transactions','Accounts','Rules','BeginningBalances','Assets','AssetValues','Splits','Categories'].map(jsonp));
-     const anchor=Object.fromEntries(bb.map(r=>[r.account_key,r]));
+     const [txn,acc,cat]=await Promise.all(['Transactions','Accounts','Categories'].map(jsonp));
+     // ---- categories (list + which ones are transfers) ----
+     CATS.length=0;TRANSFER_CATS=new Set();
+     (cat||[]).forEach(c=>{const name=c['Category'];if(!name)return;if(CATS.indexOf(name)<0)CATS.push(name);
+       if(String(c['Type']||'').toLowerCase()==='transfer')TRANSFER_CATS.add(name);});
+     // ---- accounts (kind/group + authoritative Tiller balance) ----
      ACCOUNTS.length=0;
-     ac.forEach(r=>{const a=anchor[r.account_key]||{};const manual=(!r.simplefin_id&&(r.type==='card'||r.type==='wallet'));
-       ACCOUNTS.push({key:r.account_key,name:r.name,inst:r.institution,
-         group:r.type==='wallet'?'bank':r.type,
-         kind:r.type==='wallet'?'manual':r.type==='invest'?'invest':r.type==='loan'?'loan':manual?'manual':r.type==='card'?'card':'cash',
-         begin:Number(a.beginning_balance)||0,asOf:String(a.as_of_date||'').slice(0,10),feed:Number(r.balance)});});
+     (acc||[]).forEach(a=>{const id=a['Account Id'];if(!id)return;
+       const type=String(a['Type']||'').toUpperCase();
+       const cls=String(a['Class']||a['Class (BH)']||'').toLowerCase();
+       let group='bank',kind='cash';
+       if(type==='CREDIT'){group='card';kind='card';}
+       else if(type.indexOf('MORTGAGE')>=0||type.indexOf('LOAN')>=0){group='loan';kind='loan';}
+       else if(type.indexOf('INVEST')>=0||type.indexOf('BROKER')>=0||type.indexOf('IRA')>=0||type.indexOf('401')>=0||type.indexOf('RETIRE')>=0){group='invest';kind='invest';}
+       else if(cls==='liability'){group='loan';kind='loan';}
+       const raw=Number(a['Last Balance'])||0;
+       const bal=(cls==='liability')?-Math.abs(raw):raw;
+       ACCOUNTS.push({key:id,name:a['Account']||id,inst:a['Institution']||'',group:group,kind:kind,
+         begin:0,asOf:String(a['Last Update']||'').slice(0,10),feed:bal,_bal:bal});});
      Object.keys(acctByKey).forEach(k=>delete acctByKey[k]);ACCOUNTS.forEach(a=>acctByKey[a.key]=a);
-     RULES=ru.map(r=>({pattern:String(r.pattern),category:r.category}));
-     (cat||[]).forEach(r=>{const c=r.category;if(c&&CATS.indexOf(c)<0)CATS.push(c);});
-     TXNS=tx.map((r,i)=>({id:i,date:String(r.posted_date).slice(0,10),account_key:r.account_key,desc:r.description,
-       amount:Number(r.amount),source:r.source,seenAt:r.sync_date,category:r.category||'',
-       transfer:r.category==='Transfer',manualCat:true,
-       dedup_key:r.dedup_key,reviewed:(r.reviewed==='yes'||r.reviewed===true)}));
-     const keyOf=t=>t.account_key+'|'+t.date+'|'+Number(t.amount).toFixed(2)+'|'+_nd(t.desc);
-     const byKey={};TXNS.forEach(t=>byKey[keyOf(t)]=t.id);
-     SPLITS={};sp.forEach(r=>{const base=String(r.parent_dedup_key).split('|').slice(0,4).join('|');
-       const id=byKey[base];if(id!=null)(SPLITS[id]=SPLITS[id]||[]).push({category:r.category,amount:Number(r.amount),cls:r.class});});
-     const hist={};av.forEach(r=>{(hist[r.asset_key]=hist[r.asset_key]||[]).push([String(r.as_of_date).slice(0,10),Number(r.value)]);});
-     VALUED.length=0;asset.forEach(r=>{const h=(hist[r.asset_key]||[]).sort((a,b)=>a[0]<b[0]?-1:1);
-       VALUED.push({key:r.asset_key,name:r.name,type:r.type,link:r.linked_liability_key||'',history:h.length?h:[['2026-01-01',0]]});});
+     // ---- transactions ----
+     TXNS=(txn||[]).map((r,i)=>{const c=r['Category']||'';return{id:i,txnId:r['Transaction ID'],
+       date:String(r['Date']).slice(0,10),account_key:r['Account ID'],desc:r['Description']||'',
+       amount:Number(r['Amount'])||0,source:r['Source']||'Tiller',
+       seenAt:String(r['Date Added']||r['Date']||'').slice(0,19),
+       category:c,transfer:TRANSFER_CATS.has(c),manualCat:!!c,reviewed:!!c};});
+     // back-compute each account's opening balance so begin + sum(txns) == Tiller balance
+     ACCOUNTS.forEach(a=>{if(a.kind==='invest')return;a.begin=Math.round((a._bal-acctTxnSum(a.key))*100)/100;});
+     SPLITS={};VALUED.length=0;RULES=[];
+     // rebuild the month axis from actual data
+     const ms=Array.from(new Set(TXNS.map(t=>t.date.slice(0,7)))).filter(Boolean).sort();
+     if(ms.length){MONTHS=ms.slice(-12);MONTH_NAMES={};MONTHS.forEach(m=>{MONTH_NAMES[m]=new Date(m+'-01T00:00:00').toLocaleString('en-US',{month:'long',year:'numeric'});});current=MONTHS[MONTHS.length-1];}
+     watermark=new Date('2000-01-01');
    }
   async function boot(){
   if(CONFIG.API_URL){try{await loadLive();}catch(e){console.error(e);
