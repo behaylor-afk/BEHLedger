@@ -627,11 +627,11 @@ function vWallet(){
 }
 
 const ADAPTERS={
-  apple:{label:'Apple Card',accountKey:'apple-card',accountName:'Apple Card',note:'Purchases export positive, so the sign is flipped; Type = Payment rows become transfers; Apple’s category is kept. Apple Card is in no aggregator — never a duplicate.',flip:true,typeCol:'Type',paymentValue:'Payment',keepCategory:true},
-  chase:{label:'Chase',accountKey:'chase-sapphire',accountName:'Chase — Sapphire Reserve',note:'Charges are already negative — no flip. Overlaps SimpleFIN, so recent rows flag as duplicates; older rows import as backfill.',flip:false,keepCategory:true},
-  amex:{label:'Amex',accountKey:'amex-gold',accountName:'American Express — Gold',note:'Charges export positive — sign flipped. Overlaps SimpleFIN.',flip:true,keepCategory:true},
+  apple:{label:'Apple Card',accountKey:'apple-card',accountName:'Apple Card',note:'Purchases export positive, so the sign is flipped; Type = Payment rows become transfers. Apple’s own category is ignored — rows come in uncategorized for your rules and New Activity. Apple Card is in no aggregator — never a duplicate.',flip:true,typeCol:'Type',paymentValue:'Payment',keepCategory:false},
+  chase:{label:'Chase',accountKey:'chase-sapphire',accountName:'Chase — Sapphire Reserve',note:'Charges are already negative — no flip. Overlaps SimpleFIN, so recent rows flag as duplicates; older rows import as backfill.',flip:false,keepCategory:false},
+  amex:{label:'Amex',accountKey:'amex-gold',accountName:'American Express — Gold',note:'Charges export positive — sign flipped. Overlaps SimpleFIN.',flip:true,keepCategory:false},
   huntington:{label:'Huntington',accountKey:'huntington-chk',accountName:'Huntington — Checking',note:'Debits already negative — no flip.',flip:false,keepCategory:false},
-  generic:{label:'Other',accountKey:'manual',accountName:'Imported account',note:'Columns auto-detected; check the sign toggle before committing.',flip:false,keepCategory:true}
+  generic:{label:'Other',accountKey:'manual',accountName:'Imported account',note:'Columns auto-detected; check the sign toggle before committing.',flip:false,keepCategory:false}
 };
 const SAMPLES={
 apple:`Transaction Date,Clearing Date,Description,Merchant,Category,Type,Amount (USD),Purchased By
