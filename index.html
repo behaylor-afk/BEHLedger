@@ -482,7 +482,7 @@ function openSplitModal(id){
     document.getElementById('modalHost').innerHTML=`<div class="overlay" id="ov"><div class="modal"><div class="mh"><h3>Split payment</h3><button class="close" id="mx">×</button></div><div class="mb">
       <div style="font-size:13px;color:var(--muted);margin-bottom:14px">${t.desc} · ${acctName(t.account_key)} · <b class="num" style="color:var(--ink)">${money2(t.amount)}</b></div>
       <table><thead><tr><th>Component</th><th>Class</th><th class="r">Amount</th><th></th></tr></thead><tbody>${rows.map((s,i)=>`<tr>
-        <td><input type="text" value="${s.category}" data-i="${i}" data-f="category" style="width:100%"></td>
+        <td><select data-i="${i}" data-f="category" style="width:100%"><option value=""></option>${CATS.map(c=>`<option ${c===s.category?'selected':''}>${c}</option>`).join('')}${(s.category&&CATS.indexOf(s.category)<0)?`<option selected>${s.category}</option>`:''}<option value="__add__">＋ add new…</option></select></td>
         <td><select data-i="${i}" data-f="cls"><option value="expense" ${s.cls==='expense'?'selected':''}>Expense</option><option value="capital" ${s.cls==='capital'?'selected':''}>Principal / equity</option><option value="transfer" ${s.cls==='transfer'?'selected':''}>Transfer</option></select></td>
         <td class="r"><input type="number" class="num" value="${s.amount}" data-i="${i}" data-f="amount" style="width:100px;text-align:right"></td>
         <td><button class="splitbtn" data-del="${i}">×</button></td></tr>`).join('')}</tbody></table>
@@ -490,7 +490,7 @@ function openSplitModal(id){
       <div style="display:flex;gap:8px;margin-top:12px"><button class="btn sm" id="addRow">+ Component</button><div style="flex:1"></div><button class="btn brass" id="saveSplit">Save split</button>${SPLITS[id]?'<button class="btn sm" id="clearSplit">Remove split</button>':''}</div>
     </div></div></div>`;
     document.getElementById('mx').onclick=close;document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')close();};
-    document.querySelectorAll('.modal [data-f]').forEach(el=>el.onchange=()=>{const s=rows[+el.dataset.i];const f=el.dataset.f;s[f]=f==='amount'?(parseFloat(el.value)||0):el.value;drawM();});
+    document.querySelectorAll('.modal [data-f]').forEach(el=>el.onchange=()=>{const s=rows[+el.dataset.i];const f=el.dataset.f;if(f==='category'&&el.value==='__add__'){const name=(prompt('New category name')||'').trim();if(name){saveCategory(name,askType(name));s.category=name;}drawM();return;}s[f]=f==='amount'?(parseFloat(el.value)||0):el.value;drawM();});
     document.querySelectorAll('.modal [data-del]').forEach(b=>b.onclick=()=>{rows.splice(+b.dataset.del,1);drawM();});
     document.getElementById('addRow').onclick=()=>{rows.push({category:'',amount:0,cls:'expense'});drawM();};
     document.getElementById('saveSplit').onclick=()=>{const al=rows.reduce((s,x)=>s+(parseFloat(x.amount)||0),0);if(Math.abs(t.amount-al)>=0.01){alert('Components must sum to the payment.');return;}SPLITS[id]=rows.map(s=>({category:s.category,amount:parseFloat(s.amount)||0,cls:s.cls}));if(CONFIG.API_URL&&t.txnId)api('saveSplits',{txnId:t.txnId,lines:JSON.stringify(SPLITS[id])}).catch(e=>console.error('split save',e));close();window.draw();};
