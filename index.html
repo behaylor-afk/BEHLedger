@@ -539,14 +539,14 @@ function vCategorization(){
   setTimeout(()=>{
     document.querySelectorAll('[data-rulecat]').forEach(sel=>sel.onchange=()=>{
       const i=+sel.dataset.rulecat;
-      if(sel.value==='__add__'){const name=(prompt('New category name')||'').trim();if(!name){window.draw();return;}saveCategory(name);saveRuleCat(i,name);window.draw();return;}
+      if(sel.value==='__add__'){const name=(prompt('New category name')||'').trim();if(!name){window.draw();return;}saveCategory(name,askType(name));saveRuleCat(i,name);window.draw();return;}
       saveRuleCat(i,sel.value);window.draw();
     });
     document.querySelectorAll('[data-ruledel]').forEach(b=>b.onclick=()=>{removeRule(+b.dataset.ruledel);window.draw();});
     const ap=document.getElementById('newRulePattern'),ac=document.getElementById('newRuleCat'),ab=document.getElementById('addRuleBtn');
-    if(ab)ab.onclick=()=>{const p=(ap.value||'').trim();if(!p)return;let cat=ac.value;if(cat==='__add__'){cat=(prompt('New category name')||'').trim();if(!cat)return;saveCategory(cat);}saveNewRule(p,cat);ap.value='';window.draw();};
+    if(ab)ab.onclick=()=>{const p=(ap.value||'').trim();if(!p)return;let cat=ac.value;if(cat==='__add__'){cat=(prompt('New category name')||'').trim();if(!cat)return;saveCategory(cat,askType(cat));}saveNewRule(p,cat);ap.value='';window.draw();};
     const ci=document.getElementById('newCatName'),cb=document.getElementById('addCatBtn');
-    if(cb)cb.onclick=()=>{const n=(ci.value||'').trim();if(!n)return;saveCategory(n);ci.value='';window.draw();};
+    if(cb)cb.onclick=()=>{const n=(ci.value||'').trim();if(!n)return;const ty=(document.getElementById('newCatType')||{}).value||'Expense';saveCategory(n,ty);ci.value='';window.draw();};
   },0);
   return `<div class="card panel"><h3>Coverage</h3><div style="display:flex;align-items:center;gap:14px"><div class="serif num" style="font-size:26px;color:var(--ink)">${pct}%</div><div style="flex:1"><div class="track" style="height:9px"><div class="fillbar" style="background:var(--inflow);width:${pct}%"></div></div></div><div style="font-size:12.5px;color:var(--muted)">${done} of ${TXNS.length} categorized · ${RULES.length} rules · ${CATS.length} categories</div></div></div>
   <div class="cols" style="margin-top:14px">
@@ -562,7 +562,7 @@ function vCategorization(){
       <div style="font-size:11px;color:var(--muted);margin-top:8px">Rules govern how new synced transactions get categorized. To fix an existing transaction, use New Activity.</div>
     </div>
     <div class="card panel"><h3>Categories <span class="hint">${CATS.length}</span></h3>
-      <div class="fr"><div class="fld"><label>Add a category</label><input type="text" id="newCatName" placeholder="e.g. Vacation"></div><button class="btn brass" id="addCatBtn">Add</button></div>
+      <div class="fr"><div class="fld"><label>Add a category</label><input type="text" id="newCatName" placeholder="e.g. Vacation"></div><div class="fld" style="max-width:130px"><label>Type</label><select id="newCatType"><option>Expense</option><option>Income</option><option>Transfer</option></select></div><button class="btn brass" id="addCatBtn">Add</button></div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${CATS.map(c=>`<span class="pill">${c}</span>`).join('')}</div>
     </div>
   </div>`;
@@ -714,7 +714,8 @@ function renderImport(){
   sc.onerror=()=>rej(new Error(action));const q=Object.entries(params||{}).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
   sc.src=CONFIG.API_URL+'?action='+action+(q?'&'+q:'')+'&callback='+cb;document.body.appendChild(sc);});}
 function persistTxn(t,changes){ if(!CONFIG.API_URL||!t.txnId||changes.category===undefined)return; api('setCategory',{txnId:t.txnId,category:changes.category}).catch(e=>console.error('save failed',e)); }
-function saveCategory(name){ if(CATS.indexOf(name)<0)CATS.push(name); if(CONFIG.API_URL)api('addCategory',{name:name,type:'Expense',group:'Uncategorized'}).catch(e=>console.error('cat save',e)); }
+function saveCategory(name,type){ type=type||'Expense'; if(CATS.indexOf(name)<0)CATS.push(name); if(type==='Transfer')TRANSFER_CATS.add(name); if(CONFIG.API_URL)api('addCategory',{name:name,type:type,group:'Uncategorized'}).catch(e=>console.error('cat save',e)); }
+function askType(name){const t=((prompt('Type for "'+name+'" — E = Expense, I = Income, T = Transfer','E')||'E').trim().toUpperCase()+'E')[0];return t==='I'?'Income':t==='T'?'Transfer':'Expense';}
 function saveRuleCat(i,cat){ if(RULES[i]){const p=RULES[i].pattern;RULES[i].category=cat; if(CONFIG.API_URL)api('updateRuleCat',{pattern:p,category:cat}).catch(e=>console.error('rule save',e));} }
 function removeRule(i){ if(RULES[i]){const p=RULES[i].pattern;RULES.splice(i,1); if(CONFIG.API_URL)api('deleteRule',{pattern:p}).catch(e=>console.error('rule del',e));} }
 function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pattern:P,category:cat}); if(CONFIG.API_URL)api('addRule',{pattern:P,category:cat}).catch(e=>console.error('rule add',e)); }
