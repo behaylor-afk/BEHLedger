@@ -196,6 +196,7 @@ const IMPORT_SEEN='2026-07-12T10:30:00';
 const CAPITAL_CATEGORIES=['Mortgage Principal','Loan Principal','Investment Contribution'];
 const INCOME=new Set(['Consulting Income','Interest Income']);
 let TRANSFER_CATS=new Set();
+const BIZ=['Personal','HOC','LTC'];
 const CATS=['Groceries','Dining','Gas & Auto','Shopping','Subscriptions','Utilities','Housing','Mortgage Interest','Real Estate Tax','Homeowners Insurance','Loan Payment','Childcare','Insurance','Healthcare','Entertainment','Travel','Transportation','Bank Fee','Cash Spending','Consulting Income','Interest Income'];
 
 const ACCOUNTS=[
@@ -408,12 +409,13 @@ function txnTable(list,allowSplit){
     return main;
   }).join('')}</tbody></table>`;
 }
-let TXF={account:'All',category:'All',q:'',from:'',to:'',sort:'desc'};
+let TXF={account:'All',category:'All',biz:'All',q:'',from:'',to:'',sort:'desc'};
 function filteredTxns(){
   return TXNS.filter(t=>{
     if(TXF.account!=='All' && t.account_key!==TXF.account) return false;
     const cat=t.transfer?'Transfer':(t.category||'Uncategorized');
     if(TXF.category!=='All' && cat!==TXF.category) return false;
+    if(TXF.biz!=='All' && (t.biz||'Personal')!==TXF.biz) return false;
     if(TXF.from && t.date<TXF.from) return false;
     if(TXF.to && t.date>TXF.to) return false;
     if(TXF.q){const q=TXF.q.toLowerCase();if(!(t.desc.toLowerCase().includes(q)||acctName(t.account_key).toLowerCase().includes(q)))return false;}
@@ -427,14 +429,16 @@ function txnRows(list){
       <td class="num" style="width:52px;color:var(--muted);font-size:12px">${t.date.slice(5).replace('-','/')}</td>
       <td>${hasSplit?'<span class="haslead">⋔</span>':''}${t.desc}<div class="inst">${acctName(t.account_key)}</div></td>
       <td style="width:170px">${hasSplit?'<span class="pill">Split</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:170px"><option value="">— uncategorized —</option><option value="Transfer" ${t.transfer?'selected':''}>Transfer</option>${CATS.map(c=>`<option ${(!t.transfer&&c===t.category)?'selected':''}>${c}</option>`).join('')}${(!t.transfer&&t.category&&CATS.indexOf(t.category)<0)?`<option selected>${t.category}</option>`:''}</select>`}</td>
+      <td style="width:110px"><select data-editbiz="${t.id}" style="font-size:12px;padding:5px 8px;max-width:110px">${BIZ.map(b=>`<option ${((t.biz||'Personal')===b)?'selected':''}>${b}</option>`).join('')}</select></td>
       <td class="r amtcell" style="width:100px">${signed(t.amount)}</td>
       <td class="r" style="width:70px"><button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
-    if(hasSplit){main+=SPLITS[t.id].map(l=>`<tr class="splitline"><td></td><td class="lead">↳ ${l.category}</td><td>${l.cls==='capital'?'<span class="cat cap">equity</span>':l.cls==='transfer'?'<span class="pill transfer">transfer</span>':'<span class="cat" style="background:#FBE9E4;color:var(--outflow)">expense</span>'}</td><td class="r num">${money2(l.amount)}</td><td></td></tr>`).join('');}
+    if(hasSplit){main+=SPLITS[t.id].map(l=>`<tr class="splitline"><td></td><td class="lead">↳ ${l.category}</td><td>${l.cls==='capital'?'<span class="cat cap">equity</span>':l.cls==='transfer'?'<span class="pill transfer">transfer</span>':'<span class="cat" style="background:#FBE9E4;color:var(--outflow)">expense</span>'}</td><td></td><td class="r num">${money2(l.amount)}</td><td></td></tr>`).join('');}
     return main;
   }).join('');
 }
 function wireTxnRows(){
   document.querySelectorAll('[data-editcat]').forEach(sel=>sel.onchange=()=>{const t=TXNS.find(x=>x.id===+sel.dataset.editcat);t.category=sel.value;t.transfer=(sel.value==='Transfer'||TRANSFER_CATS.has(sel.value));t.manualCat=true;persistTxn(t,{category:sel.value});renderTxnTable();});
+  document.querySelectorAll('[data-editbiz]').forEach(sel=>sel.onchange=()=>{const t=TXNS.find(x=>x.id===+sel.dataset.editbiz);t.biz=sel.value;if(CONFIG.API_URL&&t.txnId)api('setBusiness',{txnId:t.txnId,value:sel.value}).catch(e=>console.error('biz save',e));renderTxnTable();});
   document.querySelectorAll('[data-split]').forEach(b=>b.onclick=()=>openSplitModal(+b.dataset.split));
 }
 function renderTxnTable(){
@@ -455,23 +459,25 @@ function vTransactions(){
     g('fAccount').value=TXF.account; g('fCategory').value=TXF.category; g('fFrom').value=TXF.from; g('fTo').value=TXF.to; g('fVendor').value=TXF.q;
     g('fAccount').onchange=()=>{TXF.account=g('fAccount').value;renderTxnTable();};
     g('fCategory').onchange=()=>{TXF.category=g('fCategory').value;renderTxnTable();};
+    g('fBiz').value=TXF.biz;g('fBiz').onchange=()=>{TXF.biz=g('fBiz').value;renderTxnTable();};
     g('fFrom').onchange=()=>{TXF.from=g('fFrom').value;renderTxnTable();};
     g('fTo').onchange=()=>{TXF.to=g('fTo').value;renderTxnTable();};
     g('fVendor').oninput=()=>{TXF.q=g('fVendor').value;renderTxnTable();};
-    g('fClear').onclick=()=>{TXF={account:'All',category:'All',q:'',from:'',to:'',sort:'desc'};window.draw();};
+    g('fClear').onclick=()=>{TXF={account:'All',category:'All',biz:'All',q:'',from:'',to:'',sort:'desc'};window.draw();};
     g('sortDate').onclick=()=>{TXF.sort=TXF.sort==='asc'?'desc':'asc';g('sortArrow').textContent=TXF.sort==='asc'?'▲':'▼';renderTxnTable();};
     renderTxnTable();
   },0);
   return `<div class="card panel" style="margin-bottom:14px"><div class="fr" style="margin-bottom:0">
       <div class="fld" style="min-width:150px"><label>Account</label><select id="fAccount">${acctOpts.map(k=>`<option value="${k}">${accountLabel(k)}</option>`).join('')}</select></div>
       <div class="fld" style="min-width:140px"><label>Category</label><select id="fCategory">${catset.map(c=>`<option>${c}</option>`).join('')}</select></div>
+      <div class="fld" style="min-width:120px"><label>Business</label><select id="fBiz">${['All',...BIZ].map(b=>`<option>${b}</option>`).join('')}</select></div>
       <div class="fld" style="min-width:130px"><label>From</label><input type="date" id="fFrom"></div>
       <div class="fld" style="min-width:130px"><label>To</label><input type="date" id="fTo"></div>
       <div class="fld" style="min-width:160px;flex:1.5"><label>Vendor / search</label><input type="text" id="fVendor" placeholder="Kroger, Amazon…"></div>
       <button class="btn" id="fClear">Clear</button>
     </div></div>
     <div class="card panel" style="margin-bottom:12px;padding:12px 18px"><div id="txnTotals" style="font-size:13px;color:var(--text)"></div></div>
-    <div class="card panel"><div style="max-height:560px;overflow:auto"><table><thead><tr><th id="sortDate" style="cursor:pointer;user-select:none" title="Click to sort by date">Date <span id="sortArrow" style="color:var(--muted)">${TXF.sort==='asc'?'▲':'▼'}</span></th><th>Description</th><th>Category</th><th class="r">Amount</th><th></th></tr></thead><tbody id="txnbody"></tbody></table></div></div>`;
+    <div class="card panel"><div style="max-height:560px;overflow:auto"><table><thead><tr><th id="sortDate" style="cursor:pointer;user-select:none" title="Click to sort by date">Date <span id="sortArrow" style="color:var(--muted)">${TXF.sort==='asc'?'▲':'▼'}</span></th><th>Description</th><th>Category</th><th>Business</th><th class="r">Amount</th><th></th></tr></thead><tbody id="txnbody"></tbody></table></div></div>`;
 }
 function bindSplit(){document.querySelectorAll('[data-split]').forEach(b=>b.onclick=()=>openSplitModal(+b.dataset.split));}
 
@@ -752,7 +758,8 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
        date:String(r['Date']).slice(0,10),account_key:r['Account ID'],desc:r['Description']||'',
        amount:Number(r['Amount'])||0,source:r['Source']||'Tiller',
        seenAt:String(r['Date Added']||r['Date']||'').slice(0,19),
-       category:c,transfer:TRANSFER_CATS.has(c),manualCat:!!c,reviewed:!!c};});
+       category:c,transfer:TRANSFER_CATS.has(c),manualCat:!!c,reviewed:!!c,
+       biz:(r['Business']||'Personal')};});
      // back-compute each account's opening balance so begin + sum(txns) == Tiller balance
      ACCOUNTS.forEach(a=>{if(a.kind==='invest')return;a.begin=Math.round((a._bal-acctTxnSum(a.key))*100)/100;});
      SPLITS={};VALUED.length=0;RULES=[];
