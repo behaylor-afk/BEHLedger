@@ -759,9 +759,23 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
        amount:Number(r['Amount'])||0,source:r['Source']||'Tiller',
        seenAt:String(r['Date Added']||r['Date']||'').slice(0,19),
        category:c,transfer:TRANSFER_CATS.has(c),manualCat:!!c,reviewed:!!c,
-       biz:(r['Business']||'Personal')};});
+       biz:(r['Business']||'Personal'),_acct:String(r['Account']||'').trim(),_inst:String(r['Institution']||'').trim()};});
+     // adopt hand-added rows (e.g. Apple Card) that have no matching Tiller account
+     TXNS.forEach(t=>{
+       const k=String(t.account_key||'').trim();
+       if(k&&acctByKey[k]){t.account_key=k;return;}
+       const nm=t._acct||'Unassigned';
+       const key=k||('manual:'+nm);
+       t.account_key=key;
+       if(!acctByKey[key]){
+         const isCard=/card|credit|visa|amex|mastercard|discover/i.test(nm);
+         const a={key:key,name:nm,inst:t._inst||'Manual',group:isCard?'card':'bank',kind:'manual',
+                  begin:0,asOf:'',feed:null,_bal:null,manual:true};
+         ACCOUNTS.push(a);acctByKey[key]=a;
+       }
+     });
      // back-compute each account's opening balance so begin + sum(txns) == Tiller balance
-     ACCOUNTS.forEach(a=>{if(a.kind==='invest')return;a.begin=Math.round((a._bal-acctTxnSum(a.key))*100)/100;});
+     ACCOUNTS.forEach(a=>{if(a.kind==='invest'||a.manual)return;a.begin=Math.round((a._bal-acctTxnSum(a.key))*100)/100;});
      SPLITS={};VALUED.length=0;RULES=[];
      const _byTxnId={};TXNS.forEach(t=>{if(t.txnId!=null&&t.txnId!=='')_byTxnId[String(t.txnId)]=t.id;});
      (spl||[]).forEach(r=>{const id=_byTxnId[String(r['txn_id'])];if(id==null)return;(SPLITS[id]=SPLITS[id]||[]).push({category:r['category']||'',amount:Number(r['amount'])||0,cls:r['class']||'expense'});});
