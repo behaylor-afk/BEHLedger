@@ -348,6 +348,8 @@ function effectiveLines(t){
 const acctTxnSum=key=>TXNS.filter(t=>t.account_key===key).reduce((s,t)=>s+t.amount,0);
 function acctBalance(a){if(a.kind==='invest')return a.feed;return Math.round((a.begin+acctTxnSum(a.key))*100)/100;}
 const valAsset=v=>v.history[v.history.length-1][1];
+const todayISO=()=>new Date().toISOString().slice(0,10);
+const slugKey=n=>(n||'asset').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,24)+'-'+Math.random().toString(36).slice(2,6);
 function netWorth(){let assets=0,liab=0;ACCOUNTS.forEach(a=>{const b=acctBalance(a);if(b>=0)assets+=b;else liab+=b;});VALUED.forEach(v=>assets+=valAsset(v));return{assets,liab,net:assets+liab};}
 function monthAgg(m){
   let income=0,expense=0,capital=0;const cats={};
@@ -611,16 +613,83 @@ function vBeginning(){
 }
 function vProperty(){
   const monthsSince=d=>Math.round((NOW-new Date(d+'T00:00:00'))/(30.44*86400000));
-  setTimeout(()=>{document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{const i=+b.dataset.up,v=parseFloat(document.getElementById('uv-'+i).value);if(!v)return;VALUED[i].history.push(['2026-07-12',v]);window.draw();});},0);
-  const totalVal=VALUED.reduce((s,v)=>s+valAsset(v),0);const totalDebt=VALUED.reduce((s,v)=>s+(v.link?acctBalance(acctByKey[v.link]):0),0);
+  const debts=ACCOUNTS.filter(a=>a.group==='loan'||a.group==='card');
+  const debtOpts=cur=>`<option value="">— none (owned outright) —</option>`+debts.map(a=>`<option value="${a.key}" ${a.key===cur?'selected':''}>${a.name} · ${money(acctBalance(a))}</option>`).join('');
+  const TYPES=[['real_estate','Real estate'],['vehicle','Vehicle'],['other','Other']];
+  setTimeout(()=>{
+    const g=id=>document.getElementById(id);
+    // record a new valuation
+    document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{
+      const i=+b.dataset.up,v=parseFloat(g('uv-'+i).value),d=g('ud-'+i).value||todayISO();
+      if(!v&&v!==0){alert('Enter a value to record.');return;}
+      const a=VALUED[i];
+      a.history=a.history.filter(h=>h[0]!==d);a.history.push([d,v]);a.history.sort((x,y)=>x[0]<y[0]?-1:1);
+      if(CONFIG.API_URL)api('addValue',{key:a.key,date:d,value:v}).catch(e=>console.error('value save',e));
+      window.draw();
+    });
+    // relink debt
+    document.querySelectorAll('[data-link]').forEach(sel=>sel.onchange=()=>{
+      const a=VALUED[+sel.dataset.link];a.link=sel.value;
+      if(CONFIG.API_URL)api('addAsset',{key:a.key,name:a.name,type:a.type,link:a.link}).catch(e=>console.error('link save',e));
+      window.draw();
+    });
+    // remove
+    document.querySelectorAll('[data-del-asset]').forEach(b=>b.onclick=()=>{
+      const i=+b.dataset.delAsset,a=VALUED[i];
+      if(!confirm('Remove '+a.name+' and its value history?'))return;
+      VALUED.splice(i,1);
+      if(CONFIG.API_URL)api('deleteAsset',{key:a.key}).catch(e=>console.error('asset delete',e));
+      window.draw();
+    });
+    // add
+    const ab=g('addAsset');
+    if(ab)ab.onclick=()=>{
+      const name=(g('naName').value||'').trim();
+      const val=parseFloat(g('naVal').value);
+      if(!name){alert('Give the asset a name.');return;}
+      if(isNaN(val)){alert('Enter what it is worth today.');return;}
+      const d=g('naDate').value||todayISO();
+      const a={key:slugKey(name),name:name,type:g('naType').value,link:g('naLink').value,history:[[d,val]]};
+      VALUED.push(a);
+      if(CONFIG.API_URL){
+        api('addAsset',{key:a.key,name:a.name,type:a.type,link:a.link})
+          .then(()=>api('addValue',{key:a.key,date:d,value:val}))
+          .catch(e=>console.error('asset save',e));
+      }
+      window.draw();
+    };
+  },0);
+  const totalVal=VALUED.reduce((s,v)=>s+valAsset(v),0);
+  const totalDebt=VALUED.reduce((s,v)=>s+(v.link&&acctByKey[v.link]?acctBalance(acctByKey[v.link]):0),0);
   return `<div class="grid-kpi" style="grid-template-columns:repeat(3,1fr)">
     <div class="card kpi"><div class="k-lbl">Total asset value</div><div class="k-val num">${money(totalVal)}</div></div>
     <div class="card kpi"><div class="k-lbl">Linked debt</div><div class="k-val num neg">${money(totalDebt)}</div></div>
     <div class="card kpi hero"><div class="k-lbl">Net equity</div><div class="k-val">${money(totalVal+totalDebt)}</div></div></div>
-    ${VALUED.map((v,i)=>{const val=valAsset(v),ld=v.history[v.history.length-1][0],mo=monthsSince(ld),stale=mo>=4;const liab=v.link?acctBalance(acctByKey[v.link]):0;const eq=val+liab;const first=v.history[0][1];const chg=val-first;
-      return `<div class="card asset"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px"><div><div style="font-size:15px;color:var(--ink);font-weight:500">${v.name}</div><div style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">${v.type.replace('_',' ')}</div></div><div style="text-align:right"><div class="aval num">${money(val)}</div><div class="stale ${stale?'old':'ok'}">${stale?`valued ${mo} mo ago — update?`:`valued ${mo===0?'this month':mo+' mo ago'}`}</div></div></div>
-      <div class="equity"><div class="e">Value<b class="num">${money(val)}</b></div>${v.link?`<div class="e">${acctByKey[v.link].name}<b class="num neg">${money(liab)}</b></div><div class="e">Equity<b class="num">${money(eq)}</b></div>`:`<div class="e">Owned outright<b class="num">${money(val)}</b></div>`}<div class="e">Since ${v.history[0][0].slice(0,7)}<b class="num ${chg<0?'neg':'pos'}">${chg<0?'▼':'▲'} ${money(Math.abs(chg))}</b></div>${sparkline(v.history.map(h=>h[1]),90,28,chg<0?'#B0503A':'#1E7A61')}</div>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap"><span style="font-size:12px;color:var(--muted)">Update value:</span><input type="number" id="uv-${i}" placeholder="new value" style="width:120px;text-align:right"><button class="btn sm" data-up="${i}">Record</button></div></div>`;}).join('')}`;
+    <div class="card panel" style="margin-bottom:12px"><h3>Add an asset</h3>
+      <div class="fr">
+        <div class="fld" style="min-width:170px"><label>Name</label><input type="text" id="naName" placeholder="e.g. Primary residence"></div>
+        <div class="fld" style="max-width:150px"><label>Type</label><select id="naType">${TYPES.map(t=>`<option value="${t[0]}">${t[1]}</option>`).join('')}</select></div>
+        <div class="fld" style="max-width:140px"><label>Value today</label><input type="number" id="naVal" placeholder="0" style="text-align:right"></div>
+        <div class="fld" style="max-width:150px"><label>As of</label><input type="date" id="naDate" value="${todayISO()}"></div>
+        <div class="fld" style="min-width:190px"><label>Debt against it</label><select id="naLink">${debtOpts('')}</select></div>
+        <button class="btn brass" id="addAsset">Add asset</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted)">Link a mortgage or loan to see equity. ${debts.length?'':'No loan or card accounts found in Tiller yet.'}</div>
+    </div>
+    ${VALUED.length?'':'<div class="card panel" style="text-align:center;color:var(--muted);font-size:13px;padding:28px">No assets yet. Add your home or a vehicle above to track equity alongside your accounts.</div>'}
+    ${VALUED.map((v,i)=>{const val=valAsset(v),ld=v.history[v.history.length-1][0],mo=monthsSince(ld),stale=mo>=4;
+      const la=v.link?acctByKey[v.link]:null;const liab=la?acctBalance(la):0;const eq=val+liab;
+      const first=v.history[0][1];const chg=val-first;const tl=(TYPES.find(t=>t[0]===v.type)||['','Other'])[1];
+      return `<div class="card asset"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px"><div><div style="font-size:15px;color:var(--ink);font-weight:500">${v.name}</div><div style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">${tl}</div></div><div style="text-align:right"><div class="aval num">${money(val)}</div><div class="stale ${stale?'old':'ok'}">${stale?`valued ${mo} mo ago — update?`:`valued ${mo===0?'this month':mo+' mo ago'}`}</div></div></div>
+      <div class="equity"><div class="e">Value<b class="num">${money(val)}</b></div>${la?`<div class="e">${la.name}<b class="num neg">${money(liab)}</b></div><div class="e">Equity<b class="num">${money(eq)}</b></div>`:`<div class="e">Owned outright<b class="num">${money(val)}</b></div>`}<div class="e">Since ${v.history[0][0].slice(0,7)}<b class="num ${chg<0?'neg':'pos'}">${chg<0?'▼':'▲'} ${money(Math.abs(chg))}</b></div>${v.history.length>1?sparkline(v.history.map(h=>h[1]),90,28,chg<0?'#A4483A':'#2F6B4F'):''}</div>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-top:14px;flex-wrap:wrap">
+        <div class="fld" style="max-width:150px"><label>Debt against it</label><select data-link="${i}">${debtOpts(v.link)}</select></div>
+        <div class="fld" style="max-width:130px"><label>New value</label><input type="number" id="uv-${i}" placeholder="0" style="text-align:right"></div>
+        <div class="fld" style="max-width:145px"><label>As of</label><input type="date" id="ud-${i}" value="${todayISO()}"></div>
+        <button class="btn sm" data-up="${i}">Record value</button>
+        <div style="flex:1"></div>
+        <button class="btn sm" data-del-asset="${i}">Remove</button>
+      </div></div>`;}).join('')}`;
 }
 
 function vWallet(){
@@ -755,7 +824,7 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
      document.body.appendChild(sc);});}
    const _nd=s=>(s||'').toUpperCase().replace(/^PURCHASE\s+/,'').replace(/[^A-Z0-9]/g,'').slice(0,6);
    async function loadLive(){
-     const [txn,acc,cat,spl]=await Promise.all(['Transactions','Accounts','Categories','Splits'].map(jsonp));
+     const [txn,acc,cat,spl,ast,av]=await Promise.all(['Transactions','Accounts','Categories','Splits','Assets','AssetValues'].map(jsonp));
      // ---- categories (list + which ones are transfers) ----
      CATS.length=0;TRANSFER_CATS=new Set();
      (cat||[]).forEach(c=>{const name=c['Category'];if(!name)return;if(CATS.indexOf(name)<0)CATS.push(name);
@@ -799,6 +868,13 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
      // back-compute each account's opening balance so begin + sum(txns) == Tiller balance
      ACCOUNTS.forEach(a=>{if(a.kind==='invest'||a.manual)return;a.begin=Math.round((a._bal-acctTxnSum(a.key))*100)/100;});
      SPLITS={};VALUED.length=0;RULES=[];
+     // ---- property & assets ----
+     const _vh={};
+     (av||[]).forEach(r=>{const k=r['asset_key'];if(!k)return;(_vh[k]=_vh[k]||[]).push([String(r['as_of_date']).slice(0,10),Number(r['value'])||0]);});
+     Object.keys(_vh).forEach(k=>_vh[k].sort((a,b)=>a[0]<b[0]?-1:1));
+     (ast||[]).forEach(r=>{const k=r['asset_key'];if(!k)return;
+       VALUED.push({key:k,name:r['name']||k,type:r['type']||'other',link:r['linked_account_id']||'',
+                    history:_vh[k]&&_vh[k].length?_vh[k]:[[todayISO(),0]]});});
      const _byTxnId={};TXNS.forEach(t=>{if(t.txnId!=null&&t.txnId!=='')_byTxnId[String(t.txnId)]=t.id;});
      (spl||[]).forEach(r=>{const id=_byTxnId[String(r['txn_id'])];if(id==null)return;(SPLITS[id]=SPLITS[id]||[]).push({category:r['category']||'',amount:Number(r['amount'])||0,cls:r['class']||'expense'});});
      // rebuild the month axis from actual data
