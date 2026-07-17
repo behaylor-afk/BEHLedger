@@ -408,7 +408,7 @@ function txnTable(list,allowSplit){
     return main;
   }).join('')}</tbody></table>`;
 }
-let TXF={account:'All',category:'All',q:'',from:'',to:''};
+let TXF={account:'All',category:'All',q:'',from:'',to:'',sort:'desc'};
 function filteredTxns(){
   return TXNS.filter(t=>{
     if(TXF.account!=='All' && t.account_key!==TXF.account) return false;
@@ -418,7 +418,7 @@ function filteredTxns(){
     if(TXF.to && t.date>TXF.to) return false;
     if(TXF.q){const q=TXF.q.toLowerCase();if(!(t.desc.toLowerCase().includes(q)||acctName(t.account_key).toLowerCase().includes(q)))return false;}
     return true;
-  });
+  }).sort((a,b)=>{const d=a.date<b.date?-1:a.date>b.date?1:0;return TXF.sort==='asc'?d:-d;});
 }
 function txnRows(list){
   return list.map(t=>{
@@ -458,7 +458,8 @@ function vTransactions(){
     g('fFrom').onchange=()=>{TXF.from=g('fFrom').value;renderTxnTable();};
     g('fTo').onchange=()=>{TXF.to=g('fTo').value;renderTxnTable();};
     g('fVendor').oninput=()=>{TXF.q=g('fVendor').value;renderTxnTable();};
-    g('fClear').onclick=()=>{TXF={account:'All',category:'All',q:'',from:'',to:''};window.draw();};
+    g('fClear').onclick=()=>{TXF={account:'All',category:'All',q:'',from:'',to:'',sort:'desc'};window.draw();};
+    g('sortDate').onclick=()=>{TXF.sort=TXF.sort==='asc'?'desc':'asc';g('sortArrow').textContent=TXF.sort==='asc'?'▲':'▼';renderTxnTable();};
     renderTxnTable();
   },0);
   return `<div class="card panel" style="margin-bottom:14px"><div class="fr" style="margin-bottom:0">
@@ -470,7 +471,7 @@ function vTransactions(){
       <button class="btn" id="fClear">Clear</button>
     </div></div>
     <div class="card panel" style="margin-bottom:12px;padding:12px 18px"><div id="txnTotals" style="font-size:13px;color:var(--text)"></div></div>
-    <div class="card panel"><div style="max-height:560px;overflow:auto"><table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="r">Amount</th><th></th></tr></thead><tbody id="txnbody"></tbody></table></div></div>`;
+    <div class="card panel"><div style="max-height:560px;overflow:auto"><table><thead><tr><th id="sortDate" style="cursor:pointer;user-select:none" title="Click to sort by date">Date <span id="sortArrow" style="color:var(--muted)">${TXF.sort==='asc'?'▲':'▼'}</span></th><th>Description</th><th>Category</th><th class="r">Amount</th><th></th></tr></thead><tbody id="txnbody"></tbody></table></div></div>`;
 }
 function bindSplit(){document.querySelectorAll('[data-split]').forEach(b=>b.onclick=()=>openSplitModal(+b.dataset.split));}
 
