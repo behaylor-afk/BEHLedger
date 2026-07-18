@@ -841,7 +841,7 @@ function renderImport(){
   window[cb]=d=>{res(d);delete window[cb];sc.remove();};const sc=document.createElement('script');
   sc.onerror=()=>rej(new Error(action));const q=Object.entries(params||{}).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
   sc.src=CONFIG.API_URL+'?action='+action+(q?'&'+q:'')+'&callback='+cb;document.body.appendChild(sc);});}
-function persistTxn(t,changes){ if(!CONFIG.API_URL||!t.txnId||changes.category===undefined)return; api('setCategory',{txnId:t.txnId,category:changes.category}).catch(e=>console.error('save failed',e)); }
+function persistTxn(t,changes){ if(!CONFIG.API_URL||!t.txnId)return; if(changes.category!==undefined)api('setCategory',{txnId:t.txnId,category:changes.category}).catch(e=>console.error('save failed',e)); if(changes.reviewed!==undefined)api('setReviewed',{txnId:t.txnId,value:changes.reviewed?'yes':''}).catch(e=>console.error('review save',e)); }
 function saveCategory(name,type){ type=type||'Expense'; if(CATS.indexOf(name)<0)CATS.push(name); if(type==='Transfer')TRANSFER_CATS.add(name); if(CONFIG.API_URL)api('addCategory',{name:name,type:type,group:'Uncategorized'}).catch(e=>console.error('cat save',e)); }
 function askType(name){const t=((prompt('Type for "'+name+'" — E = Expense, I = Income, T = Transfer','E')||'E').trim().toUpperCase()+'E')[0];return t==='I'?'Income':t==='T'?'Transfer':'Expense';}
 function saveRuleCat(i,cat){ if(RULES[i]){const p=RULES[i].pattern;RULES[i].category=cat; if(CONFIG.API_URL)api('updateRuleCat',{pattern:p,category:cat}).catch(e=>console.error('rule save',e));} }
@@ -879,7 +879,7 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
        date:String(r['Date']).slice(0,10),account_key:r['Account ID'],desc:r['Description']||'',
        amount:Number(r['Amount'])||0,source:r['Source']||'Tiller',
        seenAt:String(r['Date Added']||r['Date']||'').slice(0,19),
-       category:c,transfer:TRANSFER_CATS.has(c),manualCat:!!c,reviewed:!!c,
+       category:c,transfer:TRANSFER_CATS.has(c),manualCat:!!c,reviewed:(!!c||String(r['Reviewed']||'').toLowerCase()==='yes'),
        biz:(r['Business']||'Personal'),_acct:String(r['Account']||'').trim(),_inst:String(r['Institution']||'').trim()};});
      // adopt hand-added rows (e.g. Apple Card) that have no matching Tiller account
      TXNS.forEach(t=>{
