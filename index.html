@@ -437,7 +437,7 @@ function vDashboard(){
     {label:'Discover Card',logo:LOGO_DISCOVER,tall:true,match:x=>/discover/i.test((x.name||'')+' '+(x.inst||''))},
     {label:'AMEX Card',logo:LOGO_AMEX,tall:true,match:x=>/amex|american express/i.test((x.name||'')+' '+(x.inst||''))},
   ];
-  setTimeout(()=>{document.querySelectorAll('[data-acct-card]').forEach(c=>c.onclick=()=>{TXF.account=c.dataset.acctCard;TXF.category='All';TXF.biz='All';TXF.q='';TXF.from='';TXF.to='';active='txns';window.draw();});},0);
+  setTimeout(()=>{document.querySelectorAll('[data-acct-card]').forEach(c=>c.onclick=()=>{TXF.account=c.dataset.acctCard;TXF.category='All';TXF.biz='All';TXF.q='';TXF.from='';TXF.to='';active='txns';window.draw();});wireTxnRows();},0);
   return `<div class="grid-kpi">
     <div class="card kpi hero"><div class="k-lbl">Net Cash Flow</div><div class="k-val">${money(a.net)}</div><div class="k-sub">${sav}% retained · ${money(a.capital)} to equity</div>${sparkline(netSeries)}</div>
     <div class="card kpi"><div class="k-lbl">Income</div><div class="k-val num">${money(a.income)}</div><div class="k-sub pos">ex-transfers</div></div>
@@ -445,7 +445,9 @@ function vDashboard(){
     <div class="card kpi"><div class="k-lbl">Net Worth</div><div class="k-val num">${money(nw.net)}</div><div class="k-sub">incl. property</div></div>
   </div>
   <div class="acctgrid">${featured.map(acctSquare).join('')}</div>
-  <div class="card panel"><h3>Recent Activity</h3>${txnTable(TXNS.filter(t=>t.date.startsWith(current)).slice(0,8),false)}</div>`;
+  <div class="card panel"><h3>Recent Activity <span class="hint">latest 8 · fully editable</span></h3>
+    <div style="overflow:auto"><table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Business</th><th class="r">Amount</th><th></th></tr></thead>
+    <tbody>${txnRows([...TXNS].sort((a,b)=>a.date<b.date?1:-1).slice(0,8))}</tbody></table></div></div>`;
 }
 function openingCash(m){const first=new Date(m+'-01T00:00:00');let cash=0;ACCOUNTS.filter(a=>a.kind==='cash').forEach(a=>{const sum=TXNS.filter(t=>t.account_key===a.key&&new Date(t.date+'T00:00:00')<first).reduce((s,t)=>s+t.amount,0);cash+=a.begin+sum;});return Math.round(cash);}
 function waterfall(m,A){
