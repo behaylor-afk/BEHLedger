@@ -369,6 +369,8 @@ function effectiveLines(t){
 const acctTxnSum=key=>TXNS.filter(t=>t.account_key===key).reduce((s,t)=>s+t.amount,0);
 function acctBalance(a){if(a.kind==='invest')return a.feed;return Math.round((a.begin+acctTxnSum(a.key))*100)/100;}
 const valAsset=v=>v.history[v.history.length-1][1];
+const assetDue=v=>v.history[v.history.length-1][0].slice(0,7)!==new Date().toISOString().slice(0,7);
+const valuationsDue=()=>VALUED.filter(assetDue).length;
 const isSplit=t=>!!(SPLITS[t.id]&&SPLITS[t.id].length);
 const isCategorized=t=>!!(t.transfer||t.category||isSplit(t));
 const todayISO=()=>new Date().toISOString().slice(0,10);
@@ -685,7 +687,11 @@ function vProperty(){
   },0);
   const totalVal=VALUED.reduce((s,v)=>s+valAsset(v),0);
   const totalDebt=VALUED.reduce((s,v)=>s+(v.link&&acctByKey[v.link]?acctBalance(acctByKey[v.link]):0),0);
-  return `<div class="grid-kpi" style="grid-template-columns:repeat(3,1fr)">
+  const nowYM=new Date().toISOString().slice(0,7);
+  const nowLabel=new Date().toLocaleString('en-US',{month:'long',year:'numeric'});
+  const due=VALUED.filter(assetDue);
+  const banner=due.length?`<div class="card panel" style="margin-bottom:12px;background:var(--tint-warn)"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div class="serif" style="font-size:15px;color:#6E551A">⏰ Monthly valuation — ${due.length} asset${due.length>1?'s':''} to update for ${nowLabel}</div><div style="flex:1;font-size:12.5px;color:#6E551A">${due.map(v=>v.name).join(' · ')}</div></div><div style="font-size:11.5px;color:#6E551A;margin-top:8px">Pull each current value (e.g. the Zillow Zestimate for a home) and enter it on the matching card below — the reminder clears as you go.</div></div>`:'';
+  return banner+`<div class="grid-kpi" style="grid-template-columns:repeat(3,1fr)">
     <div class="card kpi"><div class="k-lbl">Total asset value</div><div class="k-val num">${money(totalVal)}</div></div>
     <div class="card kpi"><div class="k-lbl">Linked debt</div><div class="k-val num neg">${money(totalDebt)}</div></div>
     <div class="card kpi hero"><div class="k-lbl">Net equity</div><div class="k-val">${money(totalVal+totalDebt)}</div></div></div>
@@ -701,10 +707,10 @@ function vProperty(){
       <div style="font-size:11px;color:var(--muted)">Link a mortgage or loan to see equity. ${debts.length?'':'No loan or card accounts found in Tiller yet.'}</div>
     </div>
     ${VALUED.length?'':'<div class="card panel" style="text-align:center;color:var(--muted);font-size:13px;padding:28px">No assets yet. Add your home or a vehicle above to track equity alongside your accounts.</div>'}
-    ${VALUED.map((v,i)=>{const val=valAsset(v),ld=v.history[v.history.length-1][0],mo=monthsSince(ld),stale=mo>=4;
+    ${VALUED.map((v,i)=>{const val=valAsset(v),ld=v.history[v.history.length-1][0],mo=monthsSince(ld),isDue=ld.slice(0,7)!==nowYM;
       const la=v.link?acctByKey[v.link]:null;const liab=la?acctBalance(la):0;const eq=val+liab;
       const first=v.history[0][1];const chg=val-first;const tl=(TYPES.find(t=>t[0]===v.type)||['','Other'])[1];
-      return `<div class="card asset"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px"><div><div style="font-size:15px;color:var(--ink);font-weight:500">${v.name}</div><div style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">${tl}</div></div><div style="text-align:right"><div class="aval num">${money(val)}</div><div class="stale ${stale?'old':'ok'}">${stale?`valued ${mo} mo ago — update?`:`valued ${mo===0?'this month':mo+' mo ago'}`}</div></div></div>
+      return `<div class="card asset"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px"><div><div style="font-size:15px;color:var(--ink);font-weight:500">${v.name}</div><div style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">${tl}</div></div><div style="text-align:right"><div class="aval num">${money(val)}</div><div class="stale ${isDue?'old':'ok'}">${isDue?`needs ${nowLabel} value${mo>1?' · last '+mo+' mo ago':''}`:`valued this month`}</div></div></div>
       <div class="equity"><div class="e">Value<b class="num">${money(val)}</b></div>${la?`<div class="e">${la.name}<b class="num neg">${money(liab)}</b></div><div class="e">Equity<b class="num">${money(eq)}</b></div>`:`<div class="e">Owned outright<b class="num">${money(val)}</b></div>`}<div class="e">Since ${v.history[0][0].slice(0,7)}<b class="num ${chg<0?'neg':'pos'}">${chg<0?'▼':'▲'} ${money(Math.abs(chg))}</b></div>${v.history.length>1?sparkline(v.history.map(h=>h[1]),90,28,chg<0?'#A4483A':'#2F6B4F'):''}</div>
       <div style="display:flex;gap:8px;align-items:flex-end;margin-top:14px;flex-wrap:wrap">
         <div class="fld" style="max-width:150px"><label>Debt against it</label><select data-link="${i}">${debtOpts(v.link)}</select></div>
@@ -1046,7 +1052,7 @@ let active='dash';
 function newCount(){let n=0;TXNS.forEach(t=>{if(new Date(t.seenAt)>watermark&&!t.reviewed)n++;});return n;}
 function renderNav(){
   const secs=[...new Set(VIEWS.map(v=>v.sec))];
-  document.getElementById('nav').innerHTML=secs.map(sec=>`<div class="navsec">${sec}</div>`+VIEWS.filter(v=>v.sec===sec).map(v=>`<button class="nav-item ${v.id===active?'active':''}" data-id="${v.id}">${v.label}${v.badge&&newCount()?`<span class="badge">${newCount()}</span>`:''}</button>`).join('')).join('');
+  document.getElementById('nav').innerHTML=secs.map(sec=>`<div class="navsec">${sec}</div>`+VIEWS.filter(v=>v.sec===sec).map(v=>`<button class="nav-item ${v.id===active?'active':''}" data-id="${v.id}">${v.label}${v.badge&&newCount()?`<span class="badge">${newCount()}</span>`:''}${v.id==='prop'&&valuationsDue()?`<span class="badge">${valuationsDue()}</span>`:''}</button>`).join('')).join('');
   document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{active=b.dataset.id;draw();});
 }
 function draw(){
