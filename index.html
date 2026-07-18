@@ -112,6 +112,8 @@
   .splitline .lead{color:var(--muted);padding-left:22px}
   .splitbtn{font-size:11px;color:var(--muted);border:1px solid var(--line);background:#fff;border-radius:999px;padding:3px 9px;cursor:pointer}
   .splitbtn:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .splitbtn.on{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600}
+  .splitbtn.on:hover{background:var(--ink2)}
   .haslead{display:inline-block;width:14px;color:var(--muted)}
 
   .acct-group{margin-bottom:12px}
@@ -476,7 +478,7 @@ function txnRows(list){
       <td style="width:170px">${hasSplit?'<span class="pill">Split</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:170px"><option value="">— uncategorized —</option><option value="Transfer" ${t.transfer?'selected':''}>Transfer</option>${CATS.map(c=>`<option ${(!t.transfer&&c===t.category)?'selected':''}>${c}</option>`).join('')}${(!t.transfer&&t.category&&CATS.indexOf(t.category)<0)?`<option selected>${t.category}</option>`:''}</select>`}</td>
       <td style="width:110px"><select data-editbiz="${t.id}" style="font-size:12px;padding:5px 8px;max-width:110px">${BIZ.map(b=>`<option ${((t.biz||'Personal')===b)?'selected':''}>${b}</option>`).join('')}</select></td>
       <td class="r amtcell" style="width:100px">${signed(t.amount)}</td>
-      <td class="r" style="width:118px;white-space:nowrap"><button class="splitbtn" data-bill="${t.id}" title="Mark as recurring bill">bill</button> <button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
+      <td class="r" style="width:118px;white-space:nowrap">${(()=>{const bb=billFor(t);return `<button class="splitbtn${bb?' on':''}" data-bill="${t.id}" title="${bb?'Tracked as bill: '+bb.name+' — click to edit':'Mark as recurring bill'}">bill</button>`;})()} <button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
     if(hasSplit){main+=SPLITS[t.id].map(l=>`<tr class="splitline"><td></td><td class="lead">↳ ${l.category}</td><td>${l.cls==='capital'?'<span class="cat cap">equity</span>':l.cls==='transfer'?'<span class="pill transfer">transfer</span>':'<span class="cat" style="background:var(--tint-out);color:var(--outflow)">expense</span>'}</td><td></td><td class="r num">${money2(l.amount)}</td><td></td></tr>`).join('');}
     return main;
   }).join('');
@@ -919,6 +921,8 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
 
 /* ============================================================ BILLS */
 let BILLS=[];
+const txnIsBill=t=>BILLS.some(b=>b.match&&(!b.account||t.account_key===b.account)&&(t.desc||'').toLowerCase().includes(b.match));
+const billFor=t=>BILLS.find(b=>b.match&&(!b.account||t.account_key===b.account)&&(t.desc||'').toLowerCase().includes(b.match));
 const billMatches=(b,ym)=>TXNS.filter(t=>t.amount<0 && t.date.slice(0,7)===ym && (!b.account||t.account_key===b.account) && b.match && t.desc.toLowerCase().includes(b.match));
 function billActual(b,ym){const m=billMatches(b,ym);if(!m.length)return null;return{amount:m.reduce((s,t)=>s+(-t.amount),0),date:m.map(t=>t.date).sort().slice(-1)[0],n:m.length};}
 function billDue(b,ym){const p=ym.split('-'),y=+p[0],mo=+p[1];const dim=new Date(y,mo,0).getDate();return ym+'-'+String(Math.min(Number(b.day)||1,dim)).padStart(2,'0');}
