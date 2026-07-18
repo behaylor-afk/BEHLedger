@@ -348,6 +348,8 @@ function effectiveLines(t){
 const acctTxnSum=key=>TXNS.filter(t=>t.account_key===key).reduce((s,t)=>s+t.amount,0);
 function acctBalance(a){if(a.kind==='invest')return a.feed;return Math.round((a.begin+acctTxnSum(a.key))*100)/100;}
 const valAsset=v=>v.history[v.history.length-1][1];
+const isSplit=t=>!!(SPLITS[t.id]&&SPLITS[t.id].length);
+const isCategorized=t=>!!(t.transfer||t.category||isSplit(t));
 const todayISO=()=>new Date().toISOString().slice(0,10);
 const slugKey=n=>(n||'asset').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,24)+'-'+Math.random().toString(36).slice(2,6);
 function netWorth(){let assets=0,liab=0;ACCOUNTS.forEach(a=>{const b=acctBalance(a);if(b>=0)assets+=b;else liab+=b;});VALUED.forEach(v=>assets+=valAsset(v));return{assets,liab,net:assets+liab};}
@@ -437,7 +439,7 @@ let TXF={account:'All',category:'All',biz:'All',q:'',from:'',to:'',sort:'desc'};
 function filteredTxns(){
   return TXNS.filter(t=>{
     if(TXF.account!=='All' && t.account_key!==TXF.account) return false;
-    const cat=t.transfer?'Transfer':(t.category||'Uncategorized');
+    const cat=t.transfer?'Transfer':isSplit(t)?'Split':(t.category||'Uncategorized');
     if(TXF.category!=='All' && cat!==TXF.category) return false;
     if(TXF.biz!=='All' && (t.biz||'Personal')!==TXF.biz) return false;
     if(TXF.from && t.date<TXF.from) return false;
@@ -476,7 +478,7 @@ function renderTxnTable(){
 }
 function vTransactions(){
   const acctOpts=['All',...ACCOUNTS.map(a=>a.key)];
-  const catset=['All','Uncategorized','Transfer',...CATS];
+  const catset=['All','Uncategorized','Split','Transfer',...CATS];
   const accountLabel=k=>k==='All'?'All accounts':acctByKey[k].name;
   setTimeout(()=>{
     const g=id=>document.getElementById(id);
@@ -539,7 +541,7 @@ function vNewActivity(){
   const all=batches.flatMap(b=>b.txns);
   if(!all.length) return `<div class="card panel" style="text-align:center;padding:48px"><div class="serif" style="font-size:20px;color:var(--ink);margin-bottom:6px">You're all caught up</div><div style="font-size:13px;color:var(--muted)">Nothing left to review. New activity collects here after each sync or import.</div></div>`;
   const inflow=all.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0),outflow=all.filter(t=>t.amount<0).reduce((s,t)=>s+t.amount,0);
-  const need=all.filter(t=>!t.category&&!t.transfer).length;
+  const need=all.filter(t=>!isCategorized(t)).length;
   const srcName=s=>s==='simplefin'?'SimpleFIN sync':s==='csv:apple'?'Apple Card import':s&&s.indexOf('csv:')===0?'CSV import ('+s.slice(4)+')':s==='manual'?'Manual entry':'Import';
   const chip=s=>s==='simplefin'?'sf':s==='manual'?'man':'csv';
   const catOpt=cur=>{const o=CATS.slice();if(o.indexOf('Transfer')<0)o.unshift('Transfer');if(cur&&o.indexOf(cur)<0)o.unshift(cur);return `<option value="">— uncategorized —</option>`+o.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');};
@@ -565,7 +567,7 @@ function vNewActivity(){
       </tr>`).join('')}</tbody></table></div>`;}).join('')}`;
 }
 function vCategorization(){
-  const done=TXNS.filter(t=>t.category||t.transfer).length,pct=TXNS.length?Math.round(done/TXNS.length*100):0;
+  const done=TXNS.filter(t=>isCategorized(t)).length,pct=TXNS.length?Math.round(done/TXNS.length*100):0;
   const catSelect=(cur,attr)=>`<select ${attr}>${CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('')}<option value="__add__">＋ add new…</option></select>`;
   setTimeout(()=>{
     document.querySelectorAll('[data-rulecat]').forEach(sel=>sel.onchange=()=>{
@@ -877,6 +879,7 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
                     history:_vh[k]&&_vh[k].length?_vh[k]:[[todayISO(),0]]});});
      const _byTxnId={};TXNS.forEach(t=>{if(t.txnId!=null&&t.txnId!=='')_byTxnId[String(t.txnId)]=t.id;});
      (spl||[]).forEach(r=>{const id=_byTxnId[String(r['txn_id'])];if(id==null)return;(SPLITS[id]=SPLITS[id]||[]).push({category:r['category']||'',amount:Number(r['amount'])||0,cls:r['class']||'expense'});});
+     TXNS.forEach(t=>{if(SPLITS[t.id])t.reviewed=true;});
      // rebuild the month axis from actual data
      const ms=Array.from(new Set(TXNS.map(t=>t.date.slice(0,7)))).filter(Boolean).sort();
      if(ms.length){MONTHS=ms.slice(-12);MONTH_NAMES={};MONTHS.forEach(m=>{MONTH_NAMES[m]=new Date(m+'-01T00:00:00').toLocaleString('en-US',{month:'long',year:'numeric'});});current=MONTHS[MONTHS.length-1];}
