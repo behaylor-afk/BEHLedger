@@ -185,6 +185,25 @@
     .grid-kpi{grid-template-columns:repeat(2,1fr)}.topbar{padding:8px}.content{padding:0 2px 30px}
   }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+  /* bills */
+  .bs{font-size:11px;padding:3px 10px;border-radius:999px;font-weight:500;white-space:nowrap;display:inline-block}
+  .bs.paid{background:var(--tint-in);color:var(--inflow)}
+  .bs.due{background:var(--sunk);color:var(--muted)}
+  .bs.missing{background:var(--tint-out);color:var(--outflow)}
+  .bs.high{background:var(--tint-warn);color:var(--warn)}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .cal-h{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:center;padding:4px 0;font-weight:600}
+  .cal-cell{min-height:78px;background:var(--sunk);border-radius:12px;padding:6px}
+  .cal-cell.empty{background:transparent}
+  .cal-cell.today{outline:2px solid var(--ink);outline-offset:-2px}
+  .cal-d{font-size:11px;color:var(--muted);font-weight:600;margin-bottom:4px}
+  .cal-bill{font-size:10px;padding:2px 6px;border-radius:6px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;cursor:default}
+  .cal-bill.paid{background:var(--tint-in);color:var(--inflow)}
+  .cal-bill.due{background:#fff;color:var(--ink2);border:1px dashed var(--line)}
+  .cal-bill.missing{background:var(--tint-out);color:var(--outflow)}
+  .cal-bill.high{background:var(--tint-warn);color:var(--warn)}
+  @media(max-width:820px){.cal-cell{min-height:56px}.cal-bill{font-size:9px}}
 </style>
 </head>
 <body>
@@ -457,7 +476,7 @@ function txnRows(list){
       <td style="width:170px">${hasSplit?'<span class="pill">Split</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:170px"><option value="">— uncategorized —</option><option value="Transfer" ${t.transfer?'selected':''}>Transfer</option>${CATS.map(c=>`<option ${(!t.transfer&&c===t.category)?'selected':''}>${c}</option>`).join('')}${(!t.transfer&&t.category&&CATS.indexOf(t.category)<0)?`<option selected>${t.category}</option>`:''}</select>`}</td>
       <td style="width:110px"><select data-editbiz="${t.id}" style="font-size:12px;padding:5px 8px;max-width:110px">${BIZ.map(b=>`<option ${((t.biz||'Personal')===b)?'selected':''}>${b}</option>`).join('')}</select></td>
       <td class="r amtcell" style="width:100px">${signed(t.amount)}</td>
-      <td class="r" style="width:70px"><button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
+      <td class="r" style="width:118px;white-space:nowrap"><button class="splitbtn" data-bill="${t.id}" title="Mark as recurring bill">bill</button> <button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
     if(hasSplit){main+=SPLITS[t.id].map(l=>`<tr class="splitline"><td></td><td class="lead">↳ ${l.category}</td><td>${l.cls==='capital'?'<span class="cat cap">equity</span>':l.cls==='transfer'?'<span class="pill transfer">transfer</span>':'<span class="cat" style="background:var(--tint-out);color:var(--outflow)">expense</span>'}</td><td></td><td class="r num">${money2(l.amount)}</td><td></td></tr>`).join('');}
     return main;
   }).join('');
@@ -466,6 +485,7 @@ function wireTxnRows(){
   document.querySelectorAll('[data-editcat]').forEach(sel=>sel.onchange=()=>{const t=TXNS.find(x=>x.id===+sel.dataset.editcat);t.category=sel.value;t.transfer=(sel.value==='Transfer'||TRANSFER_CATS.has(sel.value));t.manualCat=true;persistTxn(t,{category:sel.value});renderTxnTable();});
   document.querySelectorAll('[data-editbiz]').forEach(sel=>sel.onchange=()=>{const t=TXNS.find(x=>x.id===+sel.dataset.editbiz);t.biz=sel.value;if(CONFIG.API_URL&&t.txnId)api('setBusiness',{txnId:t.txnId,value:sel.value}).catch(e=>console.error('biz save',e));renderTxnTable();});
   document.querySelectorAll('[data-split]').forEach(b=>b.onclick=()=>openSplitModal(+b.dataset.split));
+  document.querySelectorAll('[data-bill]').forEach(b=>b.onclick=()=>billFromTxn(+b.dataset.bill));
 }
 function renderTxnTable(){
   const list=filteredTxns();
@@ -826,7 +846,7 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
      document.body.appendChild(sc);});}
    const _nd=s=>(s||'').toUpperCase().replace(/^PURCHASE\s+/,'').replace(/[^A-Z0-9]/g,'').slice(0,6);
    async function loadLive(){
-     const [txn,acc,cat,spl,ast,av]=await Promise.all(['Transactions','Accounts','Categories','Splits','Assets','AssetValues'].map(jsonp));
+     const [txn,acc,cat,spl,ast,av,bl]=await Promise.all(['Transactions','Accounts','Categories','Splits','Assets','AssetValues','Bills'].map(jsonp));
      // ---- categories (list + which ones are transfers) ----
      CATS.length=0;TRANSFER_CATS=new Set();
      (cat||[]).forEach(c=>{const name=c['Category'];if(!name)return;if(CATS.indexOf(name)<0)CATS.push(name);
@@ -880,6 +900,9 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
      const _byTxnId={};TXNS.forEach(t=>{if(t.txnId!=null&&t.txnId!=='')_byTxnId[String(t.txnId)]=t.id;});
      (spl||[]).forEach(r=>{const id=_byTxnId[String(r['txn_id'])];if(id==null)return;(SPLITS[id]=SPLITS[id]||[]).push({category:r['category']||'',amount:Number(r['amount'])||0,cls:r['class']||'expense'});});
      TXNS.forEach(t=>{if(SPLITS[t.id])t.reviewed=true;});
+     // ---- recurring bills ----
+     BILLS=(bl||[]).filter(r=>r['bill_key']).map(r=>({key:r['bill_key'],name:r['name']||'',match:String(r['match']||'').toLowerCase(),
+       account:r['account_id']||'',category:r['category']||'',expected:Number(r['expected'])||0,day:Number(r['day'])||1}));
      // rebuild the month axis from actual data
      const ms=Array.from(new Set(TXNS.map(t=>t.date.slice(0,7)))).filter(Boolean).sort();
      if(ms.length){MONTHS=ms.slice(-12);MONTH_NAMES={};MONTHS.forEach(m=>{MONTH_NAMES[m]=new Date(m+'-01T00:00:00').toLocaleString('en-US',{month:'long',year:'numeric'});});current=MONTHS[MONTHS.length-1];}
@@ -893,6 +916,113 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
   document.getElementById('footInfo').textContent=CONFIG.API_URL?'Live · updated '+NOW.toLocaleDateString():'Demo · '+ACCOUNTS.length+' accounts';
   renderNav();draw();
 }
+
+/* ============================================================ BILLS */
+let BILLS=[];
+const billMatches=(b,ym)=>TXNS.filter(t=>t.amount<0 && t.date.slice(0,7)===ym && (!b.account||t.account_key===b.account) && b.match && t.desc.toLowerCase().includes(b.match));
+function billActual(b,ym){const m=billMatches(b,ym);if(!m.length)return null;return{amount:m.reduce((s,t)=>s+(-t.amount),0),date:m.map(t=>t.date).sort().slice(-1)[0],n:m.length};}
+function billDue(b,ym){const p=ym.split('-'),y=+p[0],mo=+p[1];const dim=new Date(y,mo,0).getDate();return ym+'-'+String(Math.min(Number(b.day)||1,dim)).padStart(2,'0');}
+function billStatus(b,ym,todayISO){const act=billActual(b,ym);const due=billDue(b,ym);const exp=Number(b.expected)||0;let state,overBy=0;if(act){overBy=exp?(act.amount-exp)/exp:0;state=(exp&&act.amount>exp*1.15&&act.amount-exp>5)?'high':'paid';}else{state=(todayISO>due)?'missing':'due';}return{act,due,exp,state,overBy};}
+function billNextDue(b){const t=new Date();const tISO=t.toISOString().slice(0,10);let ym=tISO.slice(0,7);let due=billDue(b,ym);let paid=!!billActual(b,ym);if(due<tISO||paid){const n=new Date(t.getFullYear(),t.getMonth()+1,1);ym=n.toISOString().slice(0,7);due=billDue(b,ym);paid=!!billActual(b,ym);}const days=Math.round((new Date(due+'T00:00:00')-new Date(tISO+'T00:00:00'))/86400000);return{due,days,paid,ym};}
+const BSLABEL={paid:'Paid',due:'Upcoming',missing:'Missing',high:'High'};
+
+function billCalendar(ym){
+  const p=ym.split('-'),y=+p[0],mo=+p[1];
+  const first=new Date(y,mo-1,1).getDay();const dim=new Date(y,mo,0).getDate();
+  const todayISO=new Date().toISOString().slice(0,10);
+  const byDay={};
+  BILLS.forEach(b=>{const st=billStatus(b,ym,todayISO);const d=+billDue(b,ym).slice(-2);(byDay[d]=byDay[d]||[]).push({b,st});});
+  let cells='';
+  for(let i=0;i<first;i++)cells+='<div class="cal-cell empty"></div>';
+  for(let d=1;d<=dim;d++){const items=byDay[d]||[];const iso=ym+'-'+String(d).padStart(2,'0');
+    cells+=`<div class="cal-cell${iso===todayISO?' today':''}"><div class="cal-d">${d}</div>${items.map(it=>`<div class="cal-bill ${it.st.state}" title="${it.b.name} · ${it.st.act?'paid '+money(it.st.act.amount):'expected '+money(it.st.exp)}">${it.b.name}</div>`).join('')}</div>`;}
+  return `<div class="cal-grid"><div class="cal-h">Sun</div><div class="cal-h">Mon</div><div class="cal-h">Tue</div><div class="cal-h">Wed</div><div class="cal-h">Thu</div><div class="cal-h">Fri</div><div class="cal-h">Sat</div>${cells}</div>`;
+}
+
+function vBills(){
+  const ym=current;const todayISO=new Date().toISOString().slice(0,10);
+  setTimeout(()=>{
+    const ab=document.getElementById('addBill');if(ab)ab.onclick=()=>openBillModal({},true);
+    document.querySelectorAll('[data-bill-edit]').forEach(b=>b.onclick=()=>openBillModal(BILLS.find(x=>x.key===b.dataset.billEdit)||{},false));
+    document.querySelectorAll('[data-bill-del]').forEach(b=>b.onclick=()=>{const k=b.dataset.billDel,bl=BILLS.find(x=>x.key===k);if(!confirm('Delete bill "'+(bl?bl.name:'')+'"?'))return;BILLS=BILLS.filter(x=>x.key!==k);if(CONFIG.API_URL)api('deleteBill',{key:k}).catch(e=>console.error('bill del',e));window.draw();});
+  },0);
+  if(!BILLS.length){
+    return `<div class="card panel" style="text-align:center;padding:44px"><div class="serif" style="font-size:21px;color:var(--ink);margin-bottom:8px">No bills tracked yet</div><div style="color:var(--muted);font-size:13px;max-width:460px;margin:0 auto 18px;line-height:1.6">Mark a recurring expense from the Transactions page — the <b>bill</b> button on any row prefills a bill from that charge. Or add one here. This page then forecasts what's due, flags missing or higher-than-expected bills, and lays the month out on a calendar.</div><button class="btn brass" id="addBill">+ Add a bill</button></div>`;
+  }
+  const monthlyTotal=BILLS.reduce((s,b)=>s+(Number(b.expected)||0),0);
+  const soon=BILLS.map(b=>({b,nd:billNextDue(b)})).filter(x=>!x.nd.paid&&x.nd.days>=0&&x.nd.days<=7).sort((a,b)=>a.nd.days-b.nd.days);
+  const statuses=BILLS.map(b=>({b,st:billStatus(b,ym,todayISO)})).sort((a,b)=>a.st.due<b.st.due?-1:1);
+  const alerts=statuses.filter(x=>x.st.state==='missing'||x.st.state==='high');
+  const dayLbl=n=>n===0?'today':n===1?'tomorrow':'in '+n+' days';
+
+  let html=`<div class="grid-kpi" style="grid-template-columns:repeat(4,1fr)">
+    <div class="card kpi"><div class="k-lbl">Monthly recurring</div><div class="k-val num">${money(monthlyTotal)}</div><div class="k-sub">${BILLS.length} bill${BILLS.length===1?'':'s'}</div></div>
+    <div class="card kpi ${soon.length?'hero':''}"><div class="k-lbl">Due in 7 days</div><div class="k-val num">${soon.length}</div><div class="k-sub">${money(soon.reduce((s,x)=>s+(Number(x.b.expected)||0),0))} expected</div></div>
+    <div class="card kpi"><div class="k-lbl">Alerts (${MONTH_NAMES[ym]||ym})</div><div class="k-val num" style="color:${alerts.length?'var(--outflow)':'inherit'}">${alerts.length}</div><div class="k-sub">missing or high</div></div>
+    <div class="card kpi"><div class="k-lbl">Paid this month</div><div class="k-val num pos">${statuses.filter(x=>x.st.act).length}/${BILLS.length}</div><div class="k-sub">${money(statuses.reduce((s,x)=>s+(x.st.act?x.st.act.amount:0),0))}</div></div>
+  </div>`;
+
+  // due soon
+  html+=`<div class="card panel" style="margin-bottom:12px"><h3>Due in the next 7 days</h3>`;
+  if(!soon.length)html+=`<div style="color:var(--muted);font-size:13px">Nothing due in the next week.</div>`;
+  else html+=soon.map(x=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)"><div><div style="font-size:13.5px;color:var(--ink)">${x.b.name}</div><div class="inst">${x.nd.due} · ${dayLbl(x.nd.days)}${x.b.account&&acctByKey[x.b.account]?' · '+acctByKey[x.b.account].name:''}</div></div><div class="num" style="font-weight:500">${money(Number(x.b.expected)||0)}</div></div>`).join('');
+  html+=`</div>`;
+
+  // alerts
+  if(alerts.length){
+    html+=`<div class="card panel" style="margin-bottom:12px"><h3>Alerts</h3>`+alerts.map(x=>{
+      if(x.st.state==='missing')return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)"><div><span class="bs missing">Missing</span> <span style="font-size:13.5px;color:var(--ink);margin-left:6px">${x.b.name}</span><div class="inst">Due ${x.st.due} · no matching charge found this month</div></div><div class="num" style="color:var(--muted)">${money(x.st.exp)} exp.</div></div>`;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)"><div><span class="bs high">High</span> <span style="font-size:13.5px;color:var(--ink);margin-left:6px">${x.b.name}</span><div class="inst">Paid ${money(x.st.act.amount)} vs ${money(x.st.exp)} expected · ${Math.round(x.st.overBy*100)}% over</div></div><div class="num neg" style="font-weight:500">+${money(x.st.act.amount-x.st.exp)}</div></div>`;
+    }).join('')+`</div>`;
+  }
+
+  // status table for the month
+  html+=`<div class="cols" style="grid-template-columns:1fr"><div class="card panel"><h3>${MONTH_NAMES[ym]||ym} — status <span class="hint">expected vs actual</span></h3>
+    <table><thead><tr><th>Bill</th><th>Due</th><th class="r">Expected</th><th class="r">Actual</th><th class="r">Variance</th><th>Status</th></tr></thead><tbody>
+    ${statuses.map(x=>{const v=x.st.act?x.st.act.amount-x.st.exp:0;return `<tr><td><div style="color:var(--ink)">${x.b.name}</div><div class="inst">${x.b.match}</div></td><td class="num">${x.st.due.slice(-2)}${x.b.account&&acctByKey[x.b.account]?'':''}</td><td class="r num">${money(x.st.exp)}</td><td class="r num">${x.st.act?money(x.st.act.amount):'—'}</td><td class="r num ${v>0?'neg':v<0?'pos':''}">${x.st.act&&x.st.exp?(v>0?'+':'')+money(v):'—'}</td><td><span class="bs ${x.st.state}">${BSLABEL[x.st.state]}</span></td></tr>`;}).join('')}
+    </tbody></table></div></div>`;
+
+  // calendar
+  html+=`<div class="card panel" style="margin-top:12px"><h3>${MONTH_NAMES[ym]||ym} — calendar</h3>${billCalendar(ym)}
+    <div class="legend" style="margin-top:12px"><span><i style="background:var(--tint-in)"></i>Paid</span><span><i style="background:#fff;border:1px dashed var(--line)"></i>Upcoming</span><span><i style="background:var(--tint-out)"></i>Missing</span><span><i style="background:var(--tint-warn)"></i>High</span></div></div>`;
+
+  // manage
+  html+=`<div class="card panel" style="margin-top:12px"><h3>Bills <span class="hint">${BILLS.length}</span></h3>
+    <table><thead><tr><th>Name</th><th>Matches on</th><th>Account</th><th class="r">Expected</th><th class="r">Due day</th><th></th></tr></thead><tbody>
+    ${BILLS.map(b=>`<tr><td style="color:var(--ink)">${b.name}</td><td class="inst">"${b.match}"</td><td class="inst">${b.account&&acctByKey[b.account]?acctByKey[b.account].name:'any account'}</td><td class="r num">${money(Number(b.expected)||0)}</td><td class="r num">${b.day}</td><td class="r" style="white-space:nowrap"><button class="splitbtn" data-bill-edit="${b.key}">edit</button> <button class="splitbtn" data-bill-del="${b.key}">×</button></td></tr>`).join('')}
+    </tbody></table>
+    <div style="margin-top:14px"><button class="btn brass" id="addBill">+ Add a bill</button></div></div>`;
+  return html;
+}
+
+function billFromTxn(id){const t=TXNS.find(x=>x.id===id);if(!t)return;const clean=(t.desc||'').replace(/^PURCHASE\s+/i,'').trim();const kw=clean.toLowerCase().split(/\s+/).slice(0,2).join(' ');openBillModal({name:clean.split(/\s+/).slice(0,3).join(' ')||'New bill',match:kw,account:t.account_key||'',category:t.category||'',expected:Math.abs(t.amount)||0,day:+t.date.slice(-2)||1},true);}
+
+function openBillModal(bill,isNew){
+  const b={key:bill.key||'',name:bill.name||'',match:bill.match||'',account:bill.account||'',category:bill.category||'',expected:bill.expected||0,day:bill.day||1};
+  const acctOpts=`<option value="">Any account</option>`+ACCOUNTS.map(a=>`<option value="${a.key}" ${a.key===b.account?'selected':''}>${a.name}</option>`).join('');
+  const catOpts=`<option value="">— none —</option>`+CATS.map(c=>`<option ${c===b.category?'selected':''}>${c}</option>`).join('');
+  document.getElementById('modalHost').innerHTML=`<div class="overlay" id="ov"><div class="modal"><div class="mh"><h3>${isNew?'New recurring bill':'Edit bill'}</h3><button class="close" id="mx">×</button></div><div class="mb">
+    <div class="fr"><div class="fld" style="min-width:100%"><label>Name</label><input type="text" id="bfName" value="${b.name.replace(/"/g,'&quot;')}" placeholder="e.g. Duke Energy"></div></div>
+    <div class="fr"><div class="fld" style="min-width:100%"><label>Match transactions containing</label><input type="text" id="bfMatch" value="${b.match.replace(/"/g,'&quot;')}" placeholder="e.g. duke energy"></div></div>
+    <div class="fr"><div class="fld"><label>Expected amount</label><input type="number" id="bfExp" value="${b.expected}" style="text-align:right"></div><div class="fld" style="max-width:110px"><label>Due day</label><input type="number" id="bfDay" value="${b.day}" min="1" max="31" style="text-align:right"></div></div>
+    <div class="fr"><div class="fld"><label>Account</label><select id="bfAcct">${acctOpts}</select></div><div class="fld"><label>Category</label><select id="bfCat">${catOpts}</select></div></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">The match is a keyword the app looks for in each transaction's description to know this bill was paid. Keep it short and distinctive.</div>
+    <div style="display:flex;gap:8px;margin-top:6px"><div style="flex:1"></div><button class="btn brass" id="bfSave">${isNew?'Add bill':'Save'}</button></div>
+  </div></div></div>`;
+  const close=()=>document.getElementById('modalHost').innerHTML='';
+  document.getElementById('mx').onclick=close;document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')close();};
+  document.getElementById('bfSave').onclick=()=>{
+    const name=(document.getElementById('bfName').value||'').trim();
+    const match=(document.getElementById('bfMatch').value||'').trim().toLowerCase();
+    if(!name){alert('Give the bill a name.');return;}
+    if(!match){alert('Enter a match keyword so the app can find this bill\u2019s charges.');return;}
+    const rec={key:b.key||slugKey(name),name:name,match:match,account:document.getElementById('bfAcct').value,category:document.getElementById('bfCat').value,expected:parseFloat(document.getElementById('bfExp').value)||0,day:parseInt(document.getElementById('bfDay').value,10)||1};
+    const ix=BILLS.findIndex(x=>x.key===rec.key);if(ix>=0)BILLS[ix]=rec;else BILLS.push(rec);
+    if(CONFIG.API_URL)api('saveBill',{key:rec.key,name:rec.name,match:rec.match,account:rec.account,category:rec.category,expected:rec.expected,day:rec.day}).catch(e=>console.error('bill save',e));
+    close();window.draw();
+  };
+}
+
 /* ============================================================ ROUTER */
 const VIEWS=[
   {id:'dash',label:'Dashboard',sec:'Reports',crumb:'Overview',month:true,render:vDashboard},
@@ -901,6 +1031,7 @@ const VIEWS=[
   {id:'accts',label:'Accounts',sec:'Ledger',crumb:'Balances',month:false,render:vAccounts},
   {id:'txns',label:'Transactions',sec:'Ledger',crumb:'Ledger',month:false,render:vTransactions},
   {id:'wallet',label:'Cash Wallet',sec:'Ledger',crumb:'Ledger',month:true,render:vWallet},
+  {id:'bills',label:'Bills',sec:'Ledger',crumb:'Bills',month:true,render:vBills},
   {id:'new',label:'New Activity',sec:'Ledger',crumb:'Review',month:false,render:vNewActivity,badge:true},
   {id:'rules',label:'Categorization',sec:'Setup',crumb:'Setup',month:false,render:vCategorization},
   {id:'import',label:'Import',sec:'Setup',crumb:'Setup',month:false,render:vImport},
