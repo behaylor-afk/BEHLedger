@@ -228,6 +228,7 @@
 
   /* tags */
   .tagchips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.suggested{background:var(--tint-warn)!important;border-color:var(--volt)!important;color:var(--warn)!important;font-style:italic}
   .tagchip{font-size:10px;padding:1px 8px;border-radius:6px;background:var(--tint-warn);color:var(--warn);white-space:nowrap;display:inline-block;vertical-align:middle;position:relative;top:-1px;font-weight:600;letter-spacing:.02em;text-transform:uppercase}
   .tagchip.on{background:var(--tint-eq);color:var(--equity);font-weight:500}
 </style>
@@ -496,6 +497,8 @@ function vAccounts(){
 function txnTable(list,allowSplit){
   return `<table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="r">Amount</th>${allowSplit?'<th></th>':''}</tr></thead><tbody>${list.map(t=>{
     const hasSplit=!!SPLITS[t.id];
+    const selCat=t.category||(opts.review&&!t.transfer&&!hasSplit?suggestCat(t.desc):'');
+    const isSug=!t.category&&!!selCat;
     let main=`<tr><td class="num">${t.date.slice(5).replace('-','/')}</td><td><span class="haslead">${hasSplit?'⋔':''}</span>${t.desc}<div class="inst">${acctName(t.account_key)}</div></td><td>${t.transfer?'<span class="pill transfer">Transfer</span>':(hasSplit?'<span class="pill">Split</span>':catPill(t.category))}</td><td class="r amtcell">${signed(t.amount)}</td>${allowSplit?`<td class="r"><button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td>`:''}</tr>`;
     if(hasSplit){main+=SPLITS[t.id].map(l=>`<tr class="splitline"><td></td><td class="lead">↳ ${l.category}</td><td>${l.cls==='capital'?'<span class="cat cap">equity</span>':l.cls==='transfer'?'<span class="pill transfer">transfer</span>':'<span class="cat" style="background:var(--tint-out);color:var(--outflow)">expense</span>'}</td><td class="r num">${money2(l.amount)}</td>${allowSplit?'<td></td>':''}</tr>`).join('');}
     return main;
@@ -521,7 +524,7 @@ function txnRows(list,opts){opts=opts||{};
     let main=`<tr>
       <td class="num" style="width:52px;color:var(--muted);font-size:12px">${t.date.slice(5).replace('-','/')}</td>
       <td>${hasSplit?'<span class="haslead">⋔</span>':''}${t.desc}${(t.tags&&t.tags.length)?' '+t.tags.map(tg=>`<span class="tagchip">${tg}</span>`).join(' '):''}<div class="inst">${acctName(t.account_key)}</div></td>
-      <td style="width:170px">${hasSplit?'<span class="pill">Split</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:170px"><option value="">— uncategorized —</option><option value="Transfer" ${t.transfer?'selected':''}>Transfer</option>${CATS.map(c=>`<option ${(!t.transfer&&c===t.category)?'selected':''}>${c}</option>`).join('')}${(!t.transfer&&t.category&&CATS.indexOf(t.category)<0)?`<option selected>${t.category}</option>`:''}</select>`}</td>
+      <td style="width:170px">${hasSplit?'<span class="pill">Split</span>':`<select data-editcat="${t.id}" class="${isSug?'suggested':''}" title="${isSug?'Suggested from past '+t.desc.slice(0,24)+' — confirm or change':''}" style="font-size:12px;padding:5px 8px;max-width:170px"><option value="">— uncategorized —</option><option value="Transfer" ${selCat==='Transfer'?'selected':''}>Transfer</option>${CATS.map(c=>`<option ${(selCat!=='Transfer'&&c===selCat)?'selected':''}>${c}</option>`).join('')}${(selCat&&selCat!=='Transfer'&&CATS.indexOf(selCat)<0)?`<option selected>${selCat}</option>`:''}</select>`}</td>
       <td style="width:110px"><select data-editbiz="${t.id}" style="font-size:12px;padding:5px 8px;max-width:110px">${BIZ.map(b=>`<option ${((t.biz||'Personal')===b)?'selected':''}>${b}</option>`).join('')}</select></td>
       <td class="r amtcell" style="width:100px">${signed(t.amount)}</td>
       <td class="r" style="width:${opts.review?196:158}px;white-space:nowrap">${opts.review?`<button class="splitbtn" data-rev="${t.id}" title="Mark reviewed">✓</button> `:''}<button class="splitbtn" data-tag="${t.id}" title="Edit tags">tag</button> ${(()=>{const bb=billFor(t);return `<button class="splitbtn${bb?' on':''}" data-bill="${t.id}" title="${bb?'Tracked as bill: '+bb.name+' — click to edit':'Mark as recurring bill'}">bill</button>`;})()} <button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
@@ -535,7 +538,7 @@ function wireTxnRows(){
   document.querySelectorAll('[data-split]').forEach(b=>b.onclick=()=>openSplitModal(+b.dataset.split));
   document.querySelectorAll('[data-bill]').forEach(b=>b.onclick=()=>billFromTxn(+b.dataset.bill));
   document.querySelectorAll('[data-tag]').forEach(b=>b.onclick=()=>openTagModal(+b.dataset.tag));
-  document.querySelectorAll('[data-rev]').forEach(b=>b.onclick=()=>{const t=TXNS.find(x=>x.id===+b.dataset.rev);if(!t)return;t.reviewed=true;persistTxn(t,{reviewed:true});window.draw();});
+  document.querySelectorAll('[data-rev]').forEach(b=>b.onclick=()=>{const t=TXNS.find(x=>x.id===+b.dataset.rev);if(!t)return;applySuggestion(t);t.reviewed=true;persistTxn(t,{reviewed:true});window.draw();});
 }
 function renderTxnTable(){
   const list=filteredTxns();
@@ -619,7 +622,7 @@ function vNewActivity(){
   const chip=s=>s==='simplefin'?'sf':s==='manual'?'man':'csv';
   const catOpt=cur=>{const o=CATS.slice();if(o.indexOf('Transfer')<0)o.unshift('Transfer');if(cur&&o.indexOf(cur)<0)o.unshift(cur);return `<option value="">— uncategorized —</option>`+o.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');};
   setTimeout(()=>{
-    document.getElementById('markBtn').onclick=()=>{all.forEach(t=>{t.reviewed=true;persistTxn(t,{reviewed:true});});window.draw();};
+    document.getElementById('markBtn').onclick=()=>{all.forEach(t=>{applySuggestion(t);t.reviewed=true;persistTxn(t,{reviewed:true});});window.draw();};
     wireTxnRows();
   },0);
   return `<div class="grid-kpi" style="grid-template-columns:repeat(5,1fr)">
@@ -820,6 +823,11 @@ chase:`Transaction Date,Post Date,Description,Category,Type,Amount
 let imp={headers:[],rows:[],adapter:ADAPTERS.apple,map:{},flip:true};
 function parseCSV(text){const rows=[];let row=[],f='',i=0,q=false;text=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');while(i<text.length){const c=text[i];if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++;}else q=false;}else f+=c;}else{if(c==='"')q=true;else if(c===','){row.push(f);f='';}else if(c==='\n'){row.push(f);rows.push(row);row=[];f='';}else f+=c;}i++;}if(f.length||row.length){row.push(f);rows.push(row);}return rows.filter(r=>r.some(x=>x!==''));}
 const normd=s=>(s||'').toUpperCase().replace(/^PURCHASE\s+/,'').replace(/[^A-Z0-9]/g,'').slice(0,6);
+const vkey=s=>(s||'').toUpperCase().replace(/^PURCHASE\s+/,'').replace(/[0-9]+/g,'').replace(/[^A-Z]/g,'').slice(0,16);
+let VENDORCAT={};
+function buildVendorCat(){VENDORCAT={};TXNS.forEach(t=>{if(!t.category)return;const k=vkey(t.desc);if(!k)return;const m=VENDORCAT[k]=VENDORCAT[k]||{};m[t.category]=(m[t.category]||0)+1;});}
+function suggestCat(desc){const k=vkey(desc);const m=VENDORCAT[k];if(!m)return '';const ks=Object.keys(m);ks.sort((a,b)=>m[b]-m[a]);return ks[0]||'';}
+function applySuggestion(t){if(t.category||t.transfer||SPLITS[t.id])return;const sug=suggestCat(t.desc);if(!sug)return;t.category=sug;t.transfer=TRANSFER_CATS.has(sug);t.manualCat=true;persistTxn(t,{category:sug});}
 function existingKeys(){const set={};TXNS.forEach(t=>{set[t.account_key+'|'+t.date+'|'+Number(t.amount).toFixed(2)+'|'+normd(t.desc)]=true;});return set;}
 function toISO(s){s=(s||'').trim();let m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(m)return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[0];return s;}
 function findCol(cands){for(const c of cands){const i=imp.headers.findIndex(h=>h.toLowerCase().includes(c));if(i>=0)return i;}return -1;}
@@ -924,6 +932,7 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
        category:c,transfer:TRANSFER_CATS.has(c),manualCat:!!c,reviewed:(!!c||String(r['Reviewed']||'').toLowerCase()==='yes'),
        biz:(r['Business']||'Personal'),tags:String(r['Tags']||'').split(',').map(x=>x.trim()).filter(Boolean),_acct:String(r['Account']||'').trim(),_inst:String(r['Institution']||'').trim()};});
      ALLTAGS=new Set();TXNS.forEach(t=>(t.tags||[]).forEach(x=>ALLTAGS.add(x)));
+     buildVendorCat();
      // adopt hand-added rows (e.g. Apple Card) that have no matching Tiller account
      TXNS.forEach(t=>{
        const k=String(t.account_key||'').trim();
