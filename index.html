@@ -223,6 +223,11 @@
   .acctcard .ac-inst{font-size:11px;color:var(--muted);margin-top:3px}
   .acctcard.missing{cursor:default;opacity:.55}
   .acctcard.missing:hover{transform:none;box-shadow:var(--shadow)}
+
+  /* tags */
+  .tagchips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+  .tagchip{font-size:10.5px;padding:2px 9px;border-radius:999px;background:var(--sunk);color:var(--ink2);white-space:nowrap;display:inline-block}
+  .tagchip.on{background:var(--tint-eq);color:var(--equity);font-weight:500}
 </style>
 </head>
 <body>
@@ -257,6 +262,7 @@ const CAPITAL_CATEGORIES=['Mortgage Principal','Loan Principal','Investment Cont
 const INCOME=new Set(['Consulting Income','Interest Income']);
 let TRANSFER_CATS=new Set();
 const BIZ=['Personal','HOC','LTC'];
+let ALLTAGS=new Set();
 const CATS=['Groceries','Dining','Gas & Auto','Shopping','Subscriptions','Utilities','Housing','Mortgage Interest','Real Estate Tax','Homeowners Insurance','Loan Payment','Childcare','Insurance','Healthcare','Entertainment','Travel','Transportation','Bank Fee','Cash Spending','Consulting Income','Interest Income'];
 
 const ACCOUNTS=[
@@ -437,7 +443,7 @@ function vDashboard(){
     {label:'Discover Card',logo:LOGO_DISCOVER,tall:true,match:x=>/discover/i.test((x.name||'')+' '+(x.inst||''))},
     {label:'AMEX Card',logo:LOGO_AMEX,tall:true,match:x=>/amex|american express/i.test((x.name||'')+' '+(x.inst||''))},
   ];
-  setTimeout(()=>{document.querySelectorAll('[data-acct-card]').forEach(c=>c.onclick=()=>{TXF.account=c.dataset.acctCard;TXF.category='All';TXF.biz='All';TXF.q='';TXF.from='';TXF.to='';active='txns';window.draw();});wireTxnRows();},0);
+  setTimeout(()=>{document.querySelectorAll('[data-acct-card]').forEach(c=>c.onclick=()=>{TXF.account=c.dataset.acctCard;TXF.category='All';TXF.biz='All';TXF.tag='All';TXF.q='';TXF.from='';TXF.to='';active='txns';window.draw();});wireTxnRows();},0);
   return `<div class="grid-kpi">
     <div class="card kpi hero"><div class="k-lbl">Net Cash Flow</div><div class="k-val">${money(a.net)}</div><div class="k-sub">${sav}% retained · ${money(a.capital)} to equity</div>${sparkline(netSeries)}</div>
     <div class="card kpi"><div class="k-lbl">Income</div><div class="k-val num">${money(a.income)}</div><div class="k-sub pos">ex-transfers</div></div>
@@ -493,13 +499,14 @@ function txnTable(list,allowSplit){
     return main;
   }).join('')}</tbody></table>`;
 }
-let TXF={account:'All',category:'All',biz:'All',q:'',from:'',to:'',sort:'desc'};
+let TXF={account:'All',category:'All',biz:'All',tag:'All',q:'',from:'',to:'',sort:'desc'};
 function filteredTxns(){
   return TXNS.filter(t=>{
     if(TXF.account!=='All' && t.account_key!==TXF.account) return false;
     const cat=t.transfer?'Transfer':isSplit(t)?'Split':(t.category||'Uncategorized');
     if(TXF.category!=='All' && cat!==TXF.category) return false;
     if(TXF.biz!=='All' && (t.biz||'Personal')!==TXF.biz) return false;
+    if(TXF.tag!=='All' && !(t.tags||[]).includes(TXF.tag)) return false;
     if(TXF.from && t.date<TXF.from) return false;
     if(TXF.to && t.date>TXF.to) return false;
     if(TXF.q){const q=TXF.q.toLowerCase();if(!(t.desc.toLowerCase().includes(q)||acctName(t.account_key).toLowerCase().includes(q)))return false;}
@@ -511,11 +518,11 @@ function txnRows(list){
     const hasSplit=!!SPLITS[t.id];
     let main=`<tr>
       <td class="num" style="width:52px;color:var(--muted);font-size:12px">${t.date.slice(5).replace('-','/')}</td>
-      <td>${hasSplit?'<span class="haslead">⋔</span>':''}${t.desc}<div class="inst">${acctName(t.account_key)}</div></td>
+      <td>${hasSplit?'<span class="haslead">⋔</span>':''}${t.desc}<div class="inst">${acctName(t.account_key)}</div>${(t.tags&&t.tags.length)?`<div class="tagchips">${t.tags.map(tg=>`<span class="tagchip">${tg}</span>`).join('')}</div>`:''}</td>
       <td style="width:170px">${hasSplit?'<span class="pill">Split</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:170px"><option value="">— uncategorized —</option><option value="Transfer" ${t.transfer?'selected':''}>Transfer</option>${CATS.map(c=>`<option ${(!t.transfer&&c===t.category)?'selected':''}>${c}</option>`).join('')}${(!t.transfer&&t.category&&CATS.indexOf(t.category)<0)?`<option selected>${t.category}</option>`:''}</select>`}</td>
       <td style="width:110px"><select data-editbiz="${t.id}" style="font-size:12px;padding:5px 8px;max-width:110px">${BIZ.map(b=>`<option ${((t.biz||'Personal')===b)?'selected':''}>${b}</option>`).join('')}</select></td>
       <td class="r amtcell" style="width:100px">${signed(t.amount)}</td>
-      <td class="r" style="width:118px;white-space:nowrap">${(()=>{const bb=billFor(t);return `<button class="splitbtn${bb?' on':''}" data-bill="${t.id}" title="${bb?'Tracked as bill: '+bb.name+' — click to edit':'Mark as recurring bill'}">bill</button>`;})()} <button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
+      <td class="r" style="width:158px;white-space:nowrap"><button class="splitbtn" data-tag="${t.id}" title="Edit tags">tag</button> ${(()=>{const bb=billFor(t);return `<button class="splitbtn${bb?' on':''}" data-bill="${t.id}" title="${bb?'Tracked as bill: '+bb.name+' — click to edit':'Mark as recurring bill'}">bill</button>`;})()} <button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
     if(hasSplit){main+=SPLITS[t.id].map(l=>`<tr class="splitline"><td></td><td class="lead">↳ ${l.category}</td><td>${l.cls==='capital'?'<span class="cat cap">equity</span>':l.cls==='transfer'?'<span class="pill transfer">transfer</span>':'<span class="cat" style="background:var(--tint-out);color:var(--outflow)">expense</span>'}</td><td></td><td class="r num">${money2(l.amount)}</td><td></td></tr>`).join('');}
     return main;
   }).join('');
@@ -525,6 +532,7 @@ function wireTxnRows(){
   document.querySelectorAll('[data-editbiz]').forEach(sel=>sel.onchange=()=>{const t=TXNS.find(x=>x.id===+sel.dataset.editbiz);t.biz=sel.value;if(CONFIG.API_URL&&t.txnId)api('setBusiness',{txnId:t.txnId,value:sel.value}).catch(e=>console.error('biz save',e));renderTxnTable();});
   document.querySelectorAll('[data-split]').forEach(b=>b.onclick=()=>openSplitModal(+b.dataset.split));
   document.querySelectorAll('[data-bill]').forEach(b=>b.onclick=()=>billFromTxn(+b.dataset.bill));
+  document.querySelectorAll('[data-tag]').forEach(b=>b.onclick=()=>openTagModal(+b.dataset.tag));
 }
 function renderTxnTable(){
   const list=filteredTxns();
@@ -545,10 +553,11 @@ function vTransactions(){
     g('fAccount').onchange=()=>{TXF.account=g('fAccount').value;renderTxnTable();};
     g('fCategory').onchange=()=>{TXF.category=g('fCategory').value;renderTxnTable();};
     g('fBiz').value=TXF.biz;g('fBiz').onchange=()=>{TXF.biz=g('fBiz').value;renderTxnTable();};
+    g('fTag').value=TXF.tag;g('fTag').onchange=()=>{TXF.tag=g('fTag').value;renderTxnTable();};
     g('fFrom').onchange=()=>{TXF.from=g('fFrom').value;renderTxnTable();};
     g('fTo').onchange=()=>{TXF.to=g('fTo').value;renderTxnTable();};
     g('fVendor').oninput=()=>{TXF.q=g('fVendor').value;renderTxnTable();};
-    g('fClear').onclick=()=>{TXF={account:'All',category:'All',biz:'All',q:'',from:'',to:'',sort:'desc'};window.draw();};
+    g('fClear').onclick=()=>{TXF={account:'All',category:'All',biz:'All',tag:'All',q:'',from:'',to:'',sort:'desc'};window.draw();};
     g('sortDate').onclick=()=>{TXF.sort=TXF.sort==='asc'?'desc':'asc';g('sortArrow').textContent=TXF.sort==='asc'?'▲':'▼';renderTxnTable();};
     renderTxnTable();
   },0);
@@ -556,6 +565,7 @@ function vTransactions(){
       <div class="fld" style="min-width:150px"><label>Account</label><select id="fAccount">${acctOpts.map(k=>`<option value="${k}">${accountLabel(k)}</option>`).join('')}</select></div>
       <div class="fld" style="min-width:140px"><label>Category</label><select id="fCategory">${catset.map(c=>`<option>${c}</option>`).join('')}</select></div>
       <div class="fld" style="min-width:120px"><label>Business</label><select id="fBiz">${['All',...BIZ].map(b=>`<option>${b}</option>`).join('')}</select></div>
+      <div class="fld" style="min-width:120px"><label>Tag</label><select id="fTag">${['All',...[...ALLTAGS].sort()].map(t=>`<option>${t}</option>`).join('')}</select></div>
       <div class="fld" style="min-width:130px"><label>From</label><input type="date" id="fFrom"></div>
       <div class="fld" style="min-width:130px"><label>To</label><input type="date" id="fTo"></div>
       <div class="fld" style="min-width:160px;flex:1.5"><label>Vendor / search</label><input type="text" id="fVendor" placeholder="Kroger, Amazon…"></div>
@@ -915,7 +925,8 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
        amount:Number(r['Amount'])||0,source:r['Source']||'Tiller',
        seenAt:String(r['Date Added']||r['Date']||'').slice(0,19),
        category:c,transfer:TRANSFER_CATS.has(c),manualCat:!!c,reviewed:(!!c||String(r['Reviewed']||'').toLowerCase()==='yes'),
-       biz:(r['Business']||'Personal'),_acct:String(r['Account']||'').trim(),_inst:String(r['Institution']||'').trim()};});
+       biz:(r['Business']||'Personal'),tags:String(r['Tags']||'').split(',').map(x=>x.trim()).filter(Boolean),_acct:String(r['Account']||'').trim(),_inst:String(r['Institution']||'').trim()};});
+     ALLTAGS=new Set();TXNS.forEach(t=>(t.tags||[]).forEach(x=>ALLTAGS.add(x)));
      // adopt hand-added rows (e.g. Apple Card) that have no matching Tiller account
      TXNS.forEach(t=>{
        const k=String(t.account_key||'').trim();
@@ -958,6 +969,45 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
   if(!CONFIG.API_URL)document.getElementById('demoBar').innerHTML='Running on demo data — set CONFIG.API_URL to go live.';
   document.getElementById('footInfo').textContent=CONFIG.API_URL?'Live · updated '+NOW.toLocaleDateString():'Demo · '+ACCOUNTS.length+' accounts';
   renderNav();draw();
+}
+
+
+/* ============================================================ TAGS */
+function openTagModal(id){
+  const t=TXNS.find(x=>x.id===id);if(!t)return;
+  let working=(t.tags||[]).slice();
+  const host=document.getElementById('modalHost');
+  const render=()=>{
+    host.innerHTML=`<div class="overlay" id="ov"><div class="modal" style="max-width:480px"><div class="mh"><h3>Tags</h3><button class="close" id="mx">×</button></div><div class="mb">
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">${t.desc} · ${signed(t.amount)}</div>
+      <div id="chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">${working.length?working.map((tg,i)=>`<span class="tagchip on">${tg} <b data-rm="${i}" style="cursor:pointer;margin-left:3px">×</b></span>`).join(''):'<span style="font-size:12px;color:var(--muted)">No tags yet</span>'}</div>
+      <div class="fr"><div class="fld" style="min-width:100%"><label>Add a tag</label><input type="text" id="tagIn" list="tagList" placeholder="e.g. deductible" autocomplete="off"><datalist id="tagList">${[...ALLTAGS].sort().map(x=>`<option value="${x}"></option>`).join('')}</datalist></div></div>
+      <div style="display:flex;gap:8px;align-items:center"><button class="btn sm" id="tagAdd">Add tag</button><div style="flex:1"></div><button class="btn brass" id="tagSave">Save</button></div>
+      ${ALLTAGS.size?`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)"><div style="font-size:11px;color:var(--muted);margin-bottom:6px">Existing tags — click to add</div><div style="display:flex;flex-wrap:wrap;gap:6px">${[...ALLTAGS].sort().map(x=>`<span class="tagchip" data-quick="${x}" style="cursor:pointer">${x}</span>`).join('')}</div></div>`:''}
+    </div></div></div>`;
+    const close=()=>host.innerHTML='';
+    document.getElementById('mx').onclick=close;document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')close();};
+    document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{working.splice(+b.dataset.rm,1);render();});
+    const addTag=()=>{const v=(document.getElementById('tagIn').value||'').trim();if(v&&working.indexOf(v)<0)working.push(v);render();setTimeout(()=>{const el=document.getElementById('tagIn');if(el)el.focus();},0);};
+    document.getElementById('tagAdd').onclick=addTag;
+    document.getElementById('tagIn').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();addTag();}};
+    document.querySelectorAll('[data-quick]').forEach(b=>b.onclick=()=>{const v=b.dataset.quick;if(working.indexOf(v)<0)working.push(v);render();});
+    document.getElementById('tagSave').onclick=()=>{t.tags=working.slice();working.forEach(x=>ALLTAGS.add(x));if(CONFIG.API_URL&&t.txnId)api('setTags',{txnId:t.txnId,value:t.tags.join(', ')}).catch(e=>console.error('tag save',e));close();window.draw();};
+  };
+  render();
+}
+
+function vTags(){
+  setTimeout(()=>{document.querySelectorAll('[data-tagrow]').forEach(r=>r.onclick=()=>{TXF={account:'All',category:'All',biz:'All',tag:r.dataset.tagrow,q:'',from:'',to:'',sort:'desc'};active='txns';window.draw();});},0);
+  const map={};
+  TXNS.forEach(t=>(t.tags||[]).forEach(tg=>{const m=map[tg]=map[tg]||{n:0,inf:0,out:0};m.n++;if(t.amount>=0)m.inf+=t.amount;else m.out+=t.amount;}));
+  const tags=Object.keys(map).sort();
+  if(!tags.length)return `<div class="card panel" style="text-align:center;padding:44px"><div class="serif" style="font-size:21px;color:var(--ink);margin-bottom:8px">No tags yet</div><div style="color:var(--muted);font-size:13px;max-width:470px;margin:0 auto;line-height:1.6">Tag a transaction from any ledger row — the <b>tag</b> button opens a quick editor. Tags are cross-cutting labels (deductible, reimburse-HOC, a project) that group transactions <i>across</i> categories. This page then totals each tag — built for year-end and reimbursable pulls.</div></div>`;
+  return `<div class="card panel"><h3>Tags <span class="hint">all transactions · click a row to view</span></h3>
+    <table><thead><tr><th>Tag</th><th class="r">Count</th><th class="r">Inflow</th><th class="r">Outflow</th><th class="r">Net</th></tr></thead><tbody>
+    ${tags.map(tg=>{const m=map[tg];return `<tr data-tagrow="${tg}" style="cursor:pointer"><td><span class="tagchip on">${tg}</span></td><td class="r num">${m.n}</td><td class="r num pos">${m.inf?money(m.inf):'—'}</td><td class="r num neg">${m.out?money(m.out):'—'}</td><td class="r num">${money(m.inf+m.out)}</td></tr>`;}).join('')}
+    </tbody></table>
+    <div style="font-size:11px;color:var(--muted);margin-top:12px">Totals span all transactions. Click a tag to open it in the ledger, where you can add a date range (e.g. a tax year).</div></div>`;
 }
 
 /* ============================================================ BILLS */
@@ -1073,6 +1123,7 @@ const VIEWS=[
   {id:'dash',label:'Dashboard',sec:'Reports',crumb:'Overview',month:true,render:vDashboard},
   {id:'flow',label:'Cash Flow',sec:'Reports',crumb:'Reports',month:true,render:vCashflow},
   {id:'cats',label:'Categories',sec:'Reports',crumb:'Reports',month:true,render:vCategories},
+  {id:'tags',label:'Tags',sec:'Reports',crumb:'Tags',month:false,render:vTags},
   {id:'accts',label:'Accounts',sec:'Ledger',crumb:'Balances',month:false,render:vAccounts},
   {id:'txns',label:'Transactions',sec:'Ledger',crumb:'Ledger',month:false,render:vTransactions},
   {id:'wallet',label:'Cash Wallet',sec:'Ledger',crumb:'Ledger',month:true,render:vWallet},
