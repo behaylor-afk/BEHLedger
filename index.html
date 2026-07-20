@@ -521,6 +521,8 @@ function filteredTxns(){
 function txnRows(list,opts){opts=opts||{};
   return list.map(t=>{
     const hasSplit=!!SPLITS[t.id];
+    const selCat=t.category||(opts.review&&!t.transfer&&!hasSplit?suggestCat(t.desc):'');
+    const isSug=!t.category&&!!selCat;
     let main=`<tr>
       <td class="num" style="width:52px;color:var(--muted);font-size:12px">${t.date.slice(5).replace('-','/')}</td>
       <td>${hasSplit?'<span class="haslead">⋔</span>':''}${t.desc}${(t.tags&&t.tags.length)?' '+t.tags.map(tg=>`<span class="tagchip">${tg}</span>`).join(' '):''}<div class="inst">${acctName(t.account_key)}</div></td>
