@@ -6,25 +6,25 @@
 <title>Ledger — Household Finance</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
 <style>
   :root{
-    /* canvas + surfaces */
-    --paper:#E7E7E3;--card:#FFFFFF;--sunk:#F5F5F1;--line:#E2E2DC;
+    /* canvas + surfaces (TaskFlow) */
+    --paper:#FAF9F7;--card:#FFFFFF;--sunk:#F5F3F0;--line:#EAE7E1;
     /* ink */
-    --ink:#131316;--ink2:#2A2A2E;--text:#33332F;--muted:#87877F;
-    /* signature accent */
-    --volt:#E3FB55;--volt-deep:#C8E23A;
+    --ink:#1A1915;--ink2:#2E2C28;--text:#33312C;--muted:#6B6860;
+    /* signature accent (amber) */
+    --volt:#EF9F27;--volt-deep:#BA7517;
     /* semantics */
-    --brass:#E3FB55;--inflow:#2F6B4F;--outflow:#A4483A;--warn:#8A6A22;--equity:#3E4C63;
-    --tint-in:#E4EFE7;--tint-out:#F6DCD6;--tint-eq:#E5E8EE;--tint-warn:#F2EBD8;
+    --brass:#EF9F27;--inflow:#1D9E75;--outflow:#D85A30;--warn:#BA7517;--equity:#127881;
+    --tint-in:#E1F5EE;--tint-out:#FAECE7;--tint-eq:#E1F1F2;--tint-warn:#FAEEDA;
     --r-card:22px;--r-ctl:12px;
-    --shadow:0 1px 2px rgba(19,19,22,.03),0 8px 24px rgba(19,19,22,.05);
-    --display:'Schibsted Grotesk','Inter',system-ui,sans-serif;
+    --shadow:0 1px 2px rgba(26,25,21,.03),0 8px 24px rgba(26,25,21,.06);
+    --display:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
-  body{font-family:'Inter',system-ui,sans-serif;background:var(--paper);color:var(--text);font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;display:flex;min-height:100vh;padding:12px;gap:12px}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--paper);color:var(--text);font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;display:flex;min-height:100vh;padding:12px;gap:12px}
   .num{font-variant-numeric:tabular-nums}
   .serif{font-family:var(--display);letter-spacing:-.015em}
   .pos{color:var(--inflow)}.neg{color:var(--outflow)}.eq{color:var(--equity)}
@@ -39,15 +39,15 @@
   .navsec{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#5A5A54;padding:12px 10px 5px}
   .nav-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;color:#A8A8A0;font-family:inherit;font-size:13.5px;padding:9px 12px;border-radius:999px;cursor:pointer;margin:2px 0;transition:background .15s,color .15s}
   .nav-item:hover{background:rgba(255,255,255,.06);color:#EDEDE7}
-  .nav-item.active{background:var(--volt);color:#131316;font-weight:600}
-  .nav-item .badge{margin-left:auto;background:var(--volt);color:#131316;font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 7px}
-  .nav-item.active .badge{background:#131316;color:var(--volt)}
+  .nav-item.active{background:var(--volt);color:#2A1706;font-weight:600}
+  .nav-item .badge{margin-left:auto;background:var(--volt);color:#2A1706;font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 7px}
+  .nav-item.active .badge{background:#2A1706;color:var(--volt)}
   .side-foot{padding:14px 20px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#6E6E67;line-height:1.5}
   .side-foot b{color:#9C9C93;font-weight:500}
-  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--volt);margin-right:6px;box-shadow:0 0 0 3px rgba(227,251,85,.22)}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--volt);margin-right:6px;box-shadow:0 0 0 3px rgba(239,159,39,.25)}
 
   main{flex:1;min-width:0;display:flex;flex-direction:column}
-  .demo{background:var(--tint-warn);color:#6E551A;font-size:12px;text-align:center;padding:6px;border-radius:999px;margin-bottom:8px}
+  .demo{background:var(--tint-warn);color:#7A4A12;font-size:12px;text-align:center;padding:6px;border-radius:999px;margin-bottom:8px}
   .demo code{background:#E7DCBE;padding:1px 5px;border-radius:5px}
   .topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:12px 8px 16px}
   .topbar .eyebrow{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
@@ -75,7 +75,7 @@
   .kpi .k-val{font-family:var(--display);font-size:30px;font-weight:600;margin-top:10px;color:var(--ink);line-height:1;letter-spacing:-.03em}
   .kpi .k-sub{font-size:12px;color:var(--muted);margin-top:8px}
   .kpi.hero{background:var(--volt)}
-  .kpi.hero .k-lbl{color:#5E6B18}.kpi.hero .k-val{color:#131316;font-size:34px}.kpi.hero .k-sub{color:#5E6B18}
+  .kpi.hero .k-lbl{color:#7A4A12}.kpi.hero .k-val{color:#2A1706;font-size:34px}.kpi.hero .k-sub{color:#7A4A12}
   .spark{position:absolute;right:14px;bottom:12px;opacity:.9}
   .cols{display:grid;grid-template-columns:1.35fr 1fr;gap:12px;margin-bottom:12px}
   @media(max-width:900px){.cols{grid-template-columns:1fr}}
@@ -101,7 +101,9 @@
   th{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:left;padding:0 10px 10px;border-bottom:1px solid var(--line)}
   td{padding:10px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:middle}
   tr:last-child td{border-bottom:0}
-  tbody tr:hover{background:var(--sunk)}
+  tbody tr{background:var(--card);transition:background .1s}
+  tbody tr:nth-child(even){background:var(--sunk)}
+  tbody tr:hover{background:var(--tint-warn)}
   .r{text-align:right}.amtcell{font-weight:500;font-family:var(--display)}
   .pill{display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:var(--sunk);color:var(--ink2);white-space:nowrap}
   .pill.transfer{color:var(--muted);font-style:italic}
@@ -124,7 +126,7 @@
   .acct .an{font-size:13.5px;color:var(--ink)}.acct .ai{font-size:11.5px;color:var(--muted);margin-top:1px}
   .acct .ab{font-family:var(--display);font-size:14.5px}
   .networth{display:flex;justify-content:space-between;align-items:center;padding:20px 22px;margin-top:8px;background:var(--ink);border-radius:var(--r-card);color:#fff}
-  .networth .nl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#8E8E86}
+  .networth .nl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#9C9A96}
   .networth .nv{font-family:var(--display);font-size:28px;color:var(--volt);letter-spacing:-.03em}
 
   .filters{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
@@ -133,7 +135,7 @@
   .btn{font-family:inherit;font-size:12.5px;font-weight:500;padding:9px 15px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
   .btn:hover{background:var(--sunk)}
   .btn.primary{background:var(--ink);color:#F4F4EF;border-color:var(--ink)}.btn.primary:hover{background:var(--ink2)}
-  .btn.brass{background:var(--volt);color:#131316;border-color:var(--volt);font-weight:600}
+  .btn.brass{background:var(--volt);color:#2A1706;border-color:var(--volt);font-weight:600}
   .btn.brass:hover{background:var(--volt-deep)}
   .btn.sm{padding:6px 11px;font-size:11.5px}
 
@@ -142,7 +144,7 @@
   .st.man{background:var(--sunk);color:var(--muted)}.st.mkt{background:var(--tint-eq);color:var(--equity)}
   .need{display:inline-block;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--tint-warn);color:var(--warn);font-weight:500}
   .tieout{display:flex;align-items:center;gap:10px;border-radius:999px;padding:11px 18px;margin-bottom:14px;font-size:13px;background:var(--tint-in);color:#1E5340}
-  .tieout.warn{background:var(--tint-warn);color:#6E551A}
+  .tieout.warn{background:var(--tint-warn);color:#7A4A12}
 
   .batch{margin-bottom:12px;overflow:hidden}
   .bh{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--sunk);flex-wrap:wrap}
@@ -418,7 +420,7 @@ const money=v=>{const n=Math.abs(Math.round(v)).toLocaleString('en-US');return(v
 const money2=v=>{const n=Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});return(v<0?'–$':'$')+n;};
 const signed=v=>`<span class="${v<0?'neg':'pos'} num">${money2(v)}</span>`;
 function catPill(c){if(!c)return `<span class="cat none">Uncategorized</span>`;if(CAPITAL_CATEGORIES.includes(c))return `<span class="cat cap">${c}</span>`;return `<span class="cat ${INCOME.has(c)?'inc':''}">${c}</span>`;}
-function sparkline(vals,w=76,h=28,color='#131316'){const mx=Math.max(...vals),mn=Math.min(...vals),r=(mx-mn)||1;const p=vals.map((v,i)=>`${(i/(vals.length-1))*w},${h-((v-mn)/r)*(h-4)-2}`).join(' ');return `<svg class="spark" width="${w}" height="${h}"><polyline points="${p}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;}
+function sparkline(vals,w=76,h=28,color='#1A1915'){const mx=Math.max(...vals),mn=Math.min(...vals),r=(mx-mn)||1;const p=vals.map((v,i)=>`${(i/(vals.length-1))*w},${h-((v-mn)/r)*(h-4)-2}`).join(' ');return `<svg class="spark" width="${w}" height="${h}"><polyline points="${p}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;}
 function monthlyBars(A){const mx=Math.max(...MONTHS.map(m=>Math.max(A[m].income,A[m].expense)));return `<div class="barwrap">${MONTHS.map(m=>{const a=A[m];return `<div class="mgroup"><div class="mbars"><div class="mbar in" style="height:${a.income/mx*100}%"><span class="cap">${money(a.income)}</span></div><div class="mbar ex" style="height:${a.expense/mx*100}%"><span class="cap">${money(a.expense)}</span></div></div><div class="mlabel">${MONTH_NAMES[m].split(' ')[0]}<span class="net">net ${money(a.net)}</span></div></div>`;}).join('')}</div><div class="legend"><span><i style="background:var(--inflow)"></i>Income</span><span><i style="background:var(--outflow)"></i>Expenses</span></div>`;}
 function catBars(a,limit){const e=Object.entries(a.cats).sort((x,y)=>y[1]-x[1]);const list=limit?e.slice(0,limit):e;const mx=e.length?e[0][1]:1;return list.map(([c,v])=>`<div class="catrow"><div class="top"><span>${c}</span><span class="amt num">${money(v)} <span class="pct">${Math.round(v/a.expense*100)}%</span></span></div><div class="track"><div class="fillbar" style="width:${v/mx*100}%"></div></div></div>`).join('');}
 
@@ -465,9 +467,9 @@ function waterfall(m,A){
   steps.push({l:'Closing',v:opening+a.net,t:'tot'});
   const W=800,H=250,pad=28,bw=48,gap=(W-pad*2-bw*steps.length)/(steps.length-1);
   const peak=opening+a.income;const sc=(H-56)/peak;let x=pad,run=0,bars='';
-  steps.forEach((s,i)=>{let y,h,fill;if(s.t==='tot'){h=s.v*sc;y=H-28-h;fill=i===0?'#2A2A2E':'#131316';run=s.v;}else if(s.t==='pos'){h=s.v*sc;y=H-28-(run+s.v)*sc;fill='var(--inflow)';run+=s.v;}else if(s.t==='cap'){h=-s.v*sc;y=H-28-run*sc;fill='var(--equity)';run+=s.v;}else{h=-s.v*sc;y=H-28-run*sc;fill='var(--outflow)';run+=s.v;}
-    const cx=x+bw/2;bars+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(2,Math.abs(h))}" rx="2" fill="${fill}"/><text x="${cx}" y="${y-6}" text-anchor="middle" font-size="9.5" fill="#2E3A45" font-family="Inter" font-weight="500">${money(s.v)}</text><text x="${cx}" y="${H-11}" text-anchor="middle" font-size="9.5" fill="#77848F" font-family="Inter">${s.l.length>9?s.l.slice(0,8)+'…':s.l}</text>`;
-    if(i<steps.length-1){const ny=H-28-run*sc;bars+=`<line x1="${x+bw}" y1="${ny}" x2="${x+bw+gap}" y2="${ny}" stroke="#E2E2DC" stroke-width="1.5" stroke-dasharray="3 3"/>`;}x+=bw+gap;});
+  steps.forEach((s,i)=>{let y,h,fill;if(s.t==='tot'){h=s.v*sc;y=H-28-h;fill=i===0?'#2E2C28':'#1A1915';run=s.v;}else if(s.t==='pos'){h=s.v*sc;y=H-28-(run+s.v)*sc;fill='var(--inflow)';run+=s.v;}else if(s.t==='cap'){h=-s.v*sc;y=H-28-run*sc;fill='var(--equity)';run+=s.v;}else{h=-s.v*sc;y=H-28-run*sc;fill='var(--outflow)';run+=s.v;}
+    const cx=x+bw/2;bars+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(2,Math.abs(h))}" rx="2" fill="${fill}"/><text x="${cx}" y="${y-6}" text-anchor="middle" font-size="9.5" fill="#33312C" font-family="Inter" font-weight="500">${money(s.v)}</text><text x="${cx}" y="${H-11}" text-anchor="middle" font-size="9.5" fill="#6B6860" font-family="Inter">${s.l.length>9?s.l.slice(0,8)+'…':s.l}</text>`;
+    if(i<steps.length-1){const ny=H-28-run*sc;bars+=`<line x1="${x+bw}" y1="${ny}" x2="${x+bw+gap}" y2="${ny}" stroke="#EAE7E1" stroke-width="1.5" stroke-dasharray="3 3"/>`;}x+=bw+gap;});
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px">${bars}</svg>`;
 }
 function vCashflow(){const A=AGG(),a=A[current];return `<div class="grid-kpi" style="grid-template-columns:repeat(4,1fr)">
@@ -489,7 +491,7 @@ function vAccounts(){
   const valSub=VALUED.reduce((s,v)=>s+valAsset(v),0);
   html+=`<div class="acct-group"><div class="gh"><span class="gt">Property &amp; Vehicles</span><span class="gs pos">${money(valSub)}</span></div>${VALUED.map(v=>`<div class="acct"><div><div class="an">${v.name}</div><div class="ai">${v.type.replace('_',' ')}</div></div><div class="ab pos">${money(valAsset(v))}</div></div>`).join('')}</div>`;
   const nw=netWorth();
-  return `<div class="card panel">${html}</div><div class="networth"><div><div class="nl">Net Worth</div><div class="inst" style="color:#8E8E86">${money(nw.assets)} assets · ${money(nw.liab)} liabilities</div></div><div class="nv">${money(nw.net)}</div></div>`;
+  return `<div class="card panel">${html}</div><div class="networth"><div><div class="nl">Net Worth</div><div class="inst" style="color:#9C9A96">${money(nw.assets)} assets · ${money(nw.liab)} liabilities</div></div><div class="nv">${money(nw.net)}</div></div>`;
 }
 function txnTable(list,allowSplit){
   return `<table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="r">Amount</th>${allowSplit?'<th></th>':''}</tr></thead><tbody>${list.map(t=>{
@@ -735,7 +737,7 @@ function vProperty(){
   const nowYM=new Date().toISOString().slice(0,7);
   const nowLabel=new Date().toLocaleString('en-US',{month:'long',year:'numeric'});
   const due=VALUED.filter(assetDue);
-  const banner=due.length?`<div class="card panel" style="margin-bottom:12px;background:var(--tint-warn)"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div class="serif" style="font-size:15px;color:#6E551A">⏰ Monthly valuation — ${due.length} asset${due.length>1?'s':''} to update for ${nowLabel}</div><div style="flex:1;font-size:12.5px;color:#6E551A">${due.map(v=>v.name).join(' · ')}</div></div><div style="font-size:11.5px;color:#6E551A;margin-top:8px">Pull each current value (e.g. the Zillow Zestimate for a home) and enter it on the matching card below — the reminder clears as you go.</div></div>`:'';
+  const banner=due.length?`<div class="card panel" style="margin-bottom:12px;background:var(--tint-warn)"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div class="serif" style="font-size:15px;color:#7A4A12">⏰ Monthly valuation — ${due.length} asset${due.length>1?'s':''} to update for ${nowLabel}</div><div style="flex:1;font-size:12.5px;color:#7A4A12">${due.map(v=>v.name).join(' · ')}</div></div><div style="font-size:11.5px;color:#7A4A12;margin-top:8px">Pull each current value (e.g. the Zillow Zestimate for a home) and enter it on the matching card below — the reminder clears as you go.</div></div>`:'';
   return banner+`<div class="grid-kpi" style="grid-template-columns:repeat(3,1fr)">
     <div class="card kpi"><div class="k-lbl">Total asset value</div><div class="k-val num">${money(totalVal)}</div></div>
     <div class="card kpi"><div class="k-lbl">Linked debt</div><div class="k-val num neg">${money(totalDebt)}</div></div>
@@ -756,7 +758,7 @@ function vProperty(){
       const la=v.link?acctByKey[v.link]:null;const liab=la?acctBalance(la):0;const eq=val+liab;
       const first=v.history[0][1];const chg=val-first;const tl=(TYPES.find(t=>t[0]===v.type)||['','Other'])[1];
       return `<div class="card asset"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px"><div><div style="font-size:15px;color:var(--ink);font-weight:500">${v.name}</div><div style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">${tl}</div></div><div style="text-align:right"><div class="aval num">${money(val)}</div><div class="stale ${isDue?'old':'ok'}">${isDue?`needs ${nowLabel} value${mo>1?' · last '+mo+' mo ago':''}`:`valued this month`}</div></div></div>
-      <div class="equity"><div class="e">Value<b class="num">${money(val)}</b></div>${la?`<div class="e">${la.name}<b class="num neg">${money(liab)}</b></div><div class="e">Equity<b class="num">${money(eq)}</b></div>`:`<div class="e">Owned outright<b class="num">${money(val)}</b></div>`}<div class="e">Since ${v.history[0][0].slice(0,7)}<b class="num ${chg<0?'neg':'pos'}">${chg<0?'▼':'▲'} ${money(Math.abs(chg))}</b></div>${v.history.length>1?sparkline(v.history.map(h=>h[1]),90,28,chg<0?'#A4483A':'#2F6B4F'):''}</div>
+      <div class="equity"><div class="e">Value<b class="num">${money(val)}</b></div>${la?`<div class="e">${la.name}<b class="num neg">${money(liab)}</b></div><div class="e">Equity<b class="num">${money(eq)}</b></div>`:`<div class="e">Owned outright<b class="num">${money(val)}</b></div>`}<div class="e">Since ${v.history[0][0].slice(0,7)}<b class="num ${chg<0?'neg':'pos'}">${chg<0?'▼':'▲'} ${money(Math.abs(chg))}</b></div>${v.history.length>1?sparkline(v.history.map(h=>h[1]),90,28,chg<0?'#D85A30':'#1D9E75'):''}</div>
       <div style="display:flex;gap:8px;align-items:flex-end;margin-top:14px;flex-wrap:wrap">
         <div class="fld" style="max-width:150px"><label>Debt against it</label><select data-link="${i}">${debtOpts(v.link)}</select></div>
         <div class="fld" style="max-width:130px"><label>New value</label><input type="number" id="uv-${i}" placeholder="0" style="text-align:right"></div>
