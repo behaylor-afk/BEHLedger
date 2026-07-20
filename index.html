@@ -402,6 +402,25 @@ const isCategorized=t=>!!(t.transfer||t.category||isSplit(t));
 const todayISO=()=>new Date().toISOString().slice(0,10);
 const slugKey=n=>(n||'asset').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,24)+'-'+Math.random().toString(36).slice(2,6);
 function netWorth(){let assets=0,liab=0;ACCOUNTS.forEach(a=>{const b=acctBalance(a);if(b>=0)assets+=b;else liab+=b;});VALUED.forEach(v=>assets+=valAsset(v));return{assets,liab,net:assets+liab};}
+function openNetWorthModal(){
+  const nw=netWorth();
+  const accts=ACCOUNTS.map(a=>({name:a.name,inst:a.inst,bal:acctBalance(a)}));
+  const assets=accts.filter(x=>x.bal>=0).sort((a,b)=>b.bal-a.bal);
+  const liabs=accts.filter(x=>x.bal<0).sort((a,b)=>a.bal-b.bal);
+  const props=VALUED.map(v=>({name:v.name,inst:String(v.type||'').replace('_',' '),bal:valAsset(v)})).sort((a,b)=>b.bal-a.bal);
+  const row=x=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line)"><div><div style="font-size:13px;color:var(--ink)">${x.name}</div>${x.inst?`<div class="inst">${x.inst}</div>`:''}</div><div class="num ${x.bal<0?'neg':'pos'}" style="font-weight:500">${money(x.bal)}</div></div>`;
+  const sec=(title,items,sub)=>`<div style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><div class="k-lbl">${title}</div><div class="num serif ${sub<0?'neg':'pos'}">${money(sub)}</div></div>${items.map(row).join('')||'<div class="inst" style="padding:6px 0">None</div>'}</div>`;
+  const assetItems=assets.concat(props);
+  const assetSub=assets.reduce((s,x)=>s+x.bal,0)+props.reduce((s,x)=>s+x.bal,0);
+  document.getElementById('modalHost').innerHTML=`<div class="overlay" id="ov"><div class="modal"><div class="mh"><h3>Net worth breakdown</h3><button class="close" id="mx">×</button></div><div class="mb">
+    ${sec('Assets',assetItems,assetSub)}
+    ${sec('Liabilities',liabs,nw.liab)}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:2px solid var(--ink)"><div style="font-weight:600;color:var(--ink)">Net worth</div><div class="serif num ${nw.net<0?'neg':'pos'}" style="font-size:21px">${money(nw.net)}</div></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px">Account balances are as reported by Tiller; property values are your recorded valuations. A property's mortgage appears under Liabilities, so equity isn't double-counted.</div>
+  </div></div></div>`;
+  const close=()=>document.getElementById('modalHost').innerHTML='';
+  document.getElementById('mx').onclick=close;document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')close();};
+}
 function monthAgg(m){
   let income=0,expense=0,capital=0;const cats={};
   TXNS.filter(t=>t.date.startsWith(m)).forEach(t=>{
@@ -446,12 +465,12 @@ function vDashboard(){
     {label:'Discover Card',logo:LOGO_DISCOVER,tall:true,match:x=>/discover/i.test((x.name||'')+' '+(x.inst||''))},
     {label:'AMEX Card',logo:LOGO_AMEX,tall:true,match:x=>/amex|american express/i.test((x.name||'')+' '+(x.inst||''))},
   ];
-  setTimeout(()=>{document.querySelectorAll('[data-acct-card]').forEach(c=>c.onclick=()=>{TXF.account=c.dataset.acctCard;TXF.category='All';TXF.biz='All';TXF.tag='All';TXF.q='';TXF.from='';TXF.to='';active='txns';window.draw();});wireTxnRows();},0);
+  setTimeout(()=>{document.querySelectorAll('[data-acct-card]').forEach(c=>c.onclick=()=>{TXF.account=c.dataset.acctCard;TXF.category='All';TXF.biz='All';TXF.tag='All';TXF.q='';TXF.from='';TXF.to='';active='txns';window.draw();});const nc=document.getElementById('nwCard');if(nc)nc.onclick=openNetWorthModal;wireTxnRows();},0);
   return `<div class="grid-kpi">
     <div class="card kpi hero"><div class="k-lbl">Net Cash Flow</div><div class="k-val">${money(a.net)}</div><div class="k-sub">${sav}% retained · ${money(a.capital)} to equity</div>${sparkline(netSeries)}</div>
     <div class="card kpi"><div class="k-lbl">Income</div><div class="k-val num">${money(a.income)}</div><div class="k-sub pos">ex-transfers</div></div>
     <div class="card kpi"><div class="k-lbl">Expenses</div><div class="k-val num">${money(a.expense)}</div><div class="k-sub neg">principal excluded</div></div>
-    <div class="card kpi"><div class="k-lbl">Net Worth</div><div class="k-val num">${money(nw.net)}</div><div class="k-sub">incl. property</div></div>
+    <div class="card kpi" id="nwCard" style="cursor:pointer" title="Click for a line-by-line breakdown"><div class="k-lbl">Net Worth</div><div class="k-val num">${money(nw.net)}</div><div class="k-sub">incl. property · click for detail</div></div>
   </div>
   <div class="acctgrid">${featured.map(acctSquare).join('')}</div>
   <div class="card panel"><h3>Recent Activity <span class="hint">latest 8 · fully editable</span></h3>
