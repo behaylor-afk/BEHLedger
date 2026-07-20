@@ -515,7 +515,7 @@ function filteredTxns(){
     return true;
   }).sort((a,b)=>{const d=a.date<b.date?-1:a.date>b.date?1:0;return TXF.sort==='asc'?d:-d;});
 }
-function txnRows(list){
+function txnRows(list,opts){opts=opts||{};
   return list.map(t=>{
     const hasSplit=!!SPLITS[t.id];
     let main=`<tr>
@@ -524,7 +524,7 @@ function txnRows(list){
       <td style="width:170px">${hasSplit?'<span class="pill">Split</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:170px"><option value="">— uncategorized —</option><option value="Transfer" ${t.transfer?'selected':''}>Transfer</option>${CATS.map(c=>`<option ${(!t.transfer&&c===t.category)?'selected':''}>${c}</option>`).join('')}${(!t.transfer&&t.category&&CATS.indexOf(t.category)<0)?`<option selected>${t.category}</option>`:''}</select>`}</td>
       <td style="width:110px"><select data-editbiz="${t.id}" style="font-size:12px;padding:5px 8px;max-width:110px">${BIZ.map(b=>`<option ${((t.biz||'Personal')===b)?'selected':''}>${b}</option>`).join('')}</select></td>
       <td class="r amtcell" style="width:100px">${signed(t.amount)}</td>
-      <td class="r" style="width:158px;white-space:nowrap"><button class="splitbtn" data-tag="${t.id}" title="Edit tags">tag</button> ${(()=>{const bb=billFor(t);return `<button class="splitbtn${bb?' on':''}" data-bill="${t.id}" title="${bb?'Tracked as bill: '+bb.name+' — click to edit':'Mark as recurring bill'}">bill</button>`;})()} <button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
+      <td class="r" style="width:${opts.review?196:158}px;white-space:nowrap">${opts.review?`<button class="splitbtn" data-rev="${t.id}" title="Mark reviewed">✓</button> `:''}<button class="splitbtn" data-tag="${t.id}" title="Edit tags">tag</button> ${(()=>{const bb=billFor(t);return `<button class="splitbtn${bb?' on':''}" data-bill="${t.id}" title="${bb?'Tracked as bill: '+bb.name+' — click to edit':'Mark as recurring bill'}">bill</button>`;})()} <button class="splitbtn" data-split="${t.id}">${hasSplit?'edit':'split'}</button></td></tr>`;
     if(hasSplit){main+=SPLITS[t.id].map(l=>`<tr class="splitline"><td></td><td class="lead">↳ ${l.category}</td><td>${l.cls==='capital'?'<span class="cat cap">equity</span>':l.cls==='transfer'?'<span class="pill transfer">transfer</span>':'<span class="cat" style="background:var(--tint-out);color:var(--outflow)">expense</span>'}</td><td></td><td class="r num">${money2(l.amount)}</td><td></td></tr>`).join('');}
     return main;
   }).join('');
@@ -535,6 +535,7 @@ function wireTxnRows(){
   document.querySelectorAll('[data-split]').forEach(b=>b.onclick=()=>openSplitModal(+b.dataset.split));
   document.querySelectorAll('[data-bill]').forEach(b=>b.onclick=()=>billFromTxn(+b.dataset.bill));
   document.querySelectorAll('[data-tag]').forEach(b=>b.onclick=()=>openTagModal(+b.dataset.tag));
+  document.querySelectorAll('[data-rev]').forEach(b=>b.onclick=()=>{const t=TXNS.find(x=>x.id===+b.dataset.rev);if(!t)return;t.reviewed=true;persistTxn(t,{reviewed:true});window.draw();});
 }
 function renderTxnTable(){
   const list=filteredTxns();
@@ -544,6 +545,7 @@ function renderTxnTable(){
   if(tot)tot.innerHTML=`<span><b>${list.length}</b> transactions</span> &nbsp;·&nbsp; <span class="pos">inflow ${money(inflow)}</span> &nbsp;·&nbsp; <span class="neg">outflow ${money(outflow)}</span> &nbsp;·&nbsp; net <b>${money(inflow+outflow)}</b>`;
   const body=document.getElementById('txnbody');
   if(body){ body.innerHTML=txnRows(list); wireTxnRows(); }
+  else if(window.draw){ window.draw(); }
 }
 function vTransactions(){
   const acctOpts=['All',...ACCOUNTS.map(a=>a.key)];
@@ -618,8 +620,7 @@ function vNewActivity(){
   const catOpt=cur=>{const o=CATS.slice();if(o.indexOf('Transfer')<0)o.unshift('Transfer');if(cur&&o.indexOf(cur)<0)o.unshift(cur);return `<option value="">— uncategorized —</option>`+o.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');};
   setTimeout(()=>{
     document.getElementById('markBtn').onclick=()=>{all.forEach(t=>{t.reviewed=true;persistTxn(t,{reviewed:true});});window.draw();};
-    document.querySelectorAll('[data-rev]').forEach(b=>b.onclick=()=>{const t=TXNS.find(x=>x.id===+b.dataset.rev);t.reviewed=true;persistTxn(t,{reviewed:true});window.draw();});
-    document.querySelectorAll('[data-editcat]').forEach(sel=>sel.onchange=()=>{const t=TXNS.find(x=>x.id===+sel.dataset.editcat);t.category=sel.value;t.transfer=(sel.value==='Transfer'||TRANSFER_CATS.has(sel.value));t.manualCat=true;persistTxn(t,{category:sel.value});window.draw();});
+    wireTxnRows();
   },0);
   return `<div class="grid-kpi" style="grid-template-columns:repeat(5,1fr)">
     <div class="card kpi"><div class="k-lbl">To review</div><div class="k-val num">${all.length}</div></div>
@@ -629,13 +630,7 @@ function vNewActivity(){
     <div class="card kpi"><div class="k-lbl">Uncategorized</div><div class="k-val num" style="color:${need?'var(--warn)':'inherit'}">${need}</div></div></div>
     <div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn brass" id="markBtn">✓ Mark all reviewed</button></div>
     ${batches.map(b=>{const net=b.txns.reduce((s,t)=>s+t.amount,0);return `<div class="card batch"><div class="bh"><div class="src"><span class="chip ${chip(b.source)}"></span>${srcName(b.source)}</div><div class="meta">${new Date(b.seenAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${b.txns.length} items</div><div class="num serif ${net<0?'neg':'pos'}" style="font-size:14px">net ${money(net)}</div></div>
-      <table><tbody>${b.txns.map(t=>`<tr>
-        <td class="num" style="color:var(--muted);font-size:12px;width:50px">${t.date.slice(5).replace('-','/')}</td>
-        <td>${t.desc}<div class="inst">${acctName(t.account_key)}</div></td>
-        <td style="width:160px"><select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:160px">${catOpt(t.transfer?'Transfer':t.category)}</select></td>
-        <td class="r amtcell" style="width:96px">${signed(t.amount)}</td>
-        <td class="r" style="width:96px"><button class="btn sm" data-rev="${t.id}">✓ Reviewed</button></td>
-      </tr>`).join('')}</tbody></table></div>`;}).join('')}`;
+      <div style="overflow:auto"><table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Business</th><th class="r">Amount</th><th></th></tr></thead><tbody>${txnRows(b.txns,{review:true})}</tbody></table></div></div>`;}).join('')}`;
 }
 function vCategorization(){
   const done=TXNS.filter(t=>isCategorized(t)).length,pct=TXNS.length?Math.round(done/TXNS.length*100):0;
