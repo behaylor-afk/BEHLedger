@@ -658,36 +658,15 @@ function vNewActivity(){
 }
 function vCategorization(){
   const done=TXNS.filter(t=>isCategorized(t)).length,pct=TXNS.length?Math.round(done/TXNS.length*100):0;
-  const catSelect=(cur,attr)=>`<select ${attr}>${CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('')}<option value="__add__">＋ add new…</option></select>`;
   setTimeout(()=>{
-    document.querySelectorAll('[data-rulecat]').forEach(sel=>sel.onchange=()=>{
-      const i=+sel.dataset.rulecat;
-      if(sel.value==='__add__'){const name=(prompt('New category name')||'').trim();if(!name){window.draw();return;}saveCategory(name,askType(name));saveRuleCat(i,name);window.draw();return;}
-      saveRuleCat(i,sel.value);window.draw();
-    });
-    document.querySelectorAll('[data-ruledel]').forEach(b=>b.onclick=()=>{removeRule(+b.dataset.ruledel);window.draw();});
-    const ap=document.getElementById('newRulePattern'),ac=document.getElementById('newRuleCat'),ab=document.getElementById('addRuleBtn');
-    if(ab)ab.onclick=()=>{const p=(ap.value||'').trim();if(!p)return;let cat=ac.value;if(cat==='__add__'){cat=(prompt('New category name')||'').trim();if(!cat)return;saveCategory(cat,askType(cat));}saveNewRule(p,cat);ap.value='';window.draw();};
     const ci=document.getElementById('newCatName'),cb=document.getElementById('addCatBtn');
     if(cb)cb.onclick=()=>{const n=(ci.value||'').trim();if(!n)return;const ty=(document.getElementById('newCatType')||{}).value||'Expense';saveCategory(n,ty);ci.value='';window.draw();};
   },0);
-  return `<div class="card panel"><h3>Coverage</h3><div style="display:flex;align-items:center;gap:14px"><div class="serif num" style="font-size:26px;color:var(--ink)">${pct}%</div><div style="flex:1"><div class="track" style="height:9px"><div class="fillbar" style="background:var(--inflow);width:${pct}%"></div></div></div><div style="font-size:12.5px;color:var(--muted)">${done} of ${TXNS.length} categorized · ${RULES.length} rules · ${CATS.length} categories</div></div></div>
-  <div class="cols" style="margin-top:14px">
-    <div class="card panel"><h3>Rule table <span class="hint">${RULES.length}</span></h3>
-      <div style="max-height:360px;overflow:auto"><table><thead><tr><th>Pattern</th><th>Category</th><th></th></tr></thead><tbody>
-      ${RULES.map((r,i)=>`<tr><td class="serif">${r.pattern}</td><td>${catSelect(r.category,'data-rulecat="'+i+'" style="font-size:12px;padding:5px 8px;max-width:170px"')}</td><td class="r"><button class="splitbtn" data-ruledel="${i}">×</button></td></tr>`).join('')}
-      </tbody></table></div>
-      <div class="fr" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
-        <div class="fld"><label>New rule — pattern</label><input type="text" id="newRulePattern" placeholder="e.g. TRADER JOE"></div>
-        <div class="fld"><label>Category</label>${catSelect(CATS[0],'id="newRuleCat" style="font-size:12px;padding:7px 9px"')}</div>
-        <button class="btn brass" id="addRuleBtn">Add rule</button>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:8px">Rules govern how new synced transactions get categorized. To fix an existing transaction, use New Activity.</div>
-    </div>
-    <div class="card panel"><h3>Categories <span class="hint">${CATS.length}</span></h3>
-      <div class="fr"><div class="fld"><label>Add a category</label><input type="text" id="newCatName" placeholder="e.g. Vacation"></div><div class="fld" style="max-width:130px"><label>Type</label><select id="newCatType"><option>Expense</option><option>Income</option><option>Transfer</option></select></div><button class="btn brass" id="addCatBtn">Add</button></div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${CATS.map(c=>`<span class="pill">${c}</span>`).join('')}</div>
-    </div>
+  return `<div class="card panel"><h3>Coverage</h3><div style="display:flex;align-items:center;gap:14px"><div class="serif num" style="font-size:26px;color:var(--ink)">${pct}%</div><div style="flex:1"><div class="track" style="height:9px"><div class="fillbar" style="background:var(--inflow);width:${pct}%"></div></div></div><div style="font-size:12.5px;color:var(--muted)">${done} of ${TXNS.length} categorized · ${CATS.length} categories</div></div></div>
+  <div class="card panel" style="margin-top:14px"><h3>Categories <span class="hint">${CATS.length}</span></h3>
+    <div class="fr"><div class="fld"><label>Add a category</label><input type="text" id="newCatName" placeholder="e.g. Vacation"></div><div class="fld" style="max-width:130px"><label>Type</label><select id="newCatType"><option>Expense</option><option>Income</option><option>Transfer</option></select></div><button class="btn brass" id="addCatBtn">Add</button></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${CATS.map(c=>`<span class="pill">${c}</span>`).join('')}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px">Categories sync with your Tiller Categories tab. New ones use the Type you pick here; adjust a category's Type in Tiller if needed.</div>
   </div>`;
 }
 function vBeginning(){
@@ -1153,7 +1132,6 @@ const VIEWS=[
   {id:'tags',label:'Tags',sec:'Reports',crumb:'Tags',month:false,render:vTags},
   {id:'accts',label:'Accounts',sec:'Ledger',crumb:'Balances',month:false,render:vAccounts},
   {id:'txns',label:'Transactions',sec:'Ledger',crumb:'Ledger',month:false,render:vTransactions},
-  {id:'wallet',label:'Cash Wallet',sec:'Ledger',crumb:'Ledger',month:true,render:vWallet},
   {id:'bills',label:'Bills',sec:'Ledger',crumb:'Bills',month:true,render:vBills},
   {id:'new',label:'New Activity',sec:'Ledger',crumb:'Review',month:false,render:vNewActivity,badge:true},
   {id:'rules',label:'Categorization',sec:'Setup',crumb:'Setup',month:false,render:vCategorization},
