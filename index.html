@@ -228,7 +228,7 @@
 
   /* tags */
   .tagchips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
-  .tagchip{font-size:10.5px;padding:2px 9px;border-radius:999px;background:var(--sunk);color:var(--ink2);white-space:nowrap;display:inline-block}
+  .tagchip{font-size:10px;padding:1px 8px;border-radius:6px;background:var(--tint-warn);color:var(--warn);white-space:nowrap;display:inline-block;vertical-align:middle;position:relative;top:-1px;font-weight:600;letter-spacing:.02em;text-transform:uppercase}
   .tagchip.on{background:var(--tint-eq);color:var(--equity);font-weight:500}
 </style>
 </head>
@@ -520,7 +520,7 @@ function txnRows(list){
     const hasSplit=!!SPLITS[t.id];
     let main=`<tr>
       <td class="num" style="width:52px;color:var(--muted);font-size:12px">${t.date.slice(5).replace('-','/')}</td>
-      <td>${hasSplit?'<span class="haslead">⋔</span>':''}${t.desc}<div class="inst">${acctName(t.account_key)}</div>${(t.tags&&t.tags.length)?`<div class="tagchips">${t.tags.map(tg=>`<span class="tagchip">${tg}</span>`).join('')}</div>`:''}</td>
+      <td>${hasSplit?'<span class="haslead">⋔</span>':''}${t.desc}${(t.tags&&t.tags.length)?' '+t.tags.map(tg=>`<span class="tagchip">${tg}</span>`).join(' '):''}<div class="inst">${acctName(t.account_key)}</div></td>
       <td style="width:170px">${hasSplit?'<span class="pill">Split</span>':`<select data-editcat="${t.id}" style="font-size:12px;padding:5px 8px;max-width:170px"><option value="">— uncategorized —</option><option value="Transfer" ${t.transfer?'selected':''}>Transfer</option>${CATS.map(c=>`<option ${(!t.transfer&&c===t.category)?'selected':''}>${c}</option>`).join('')}${(!t.transfer&&t.category&&CATS.indexOf(t.category)<0)?`<option selected>${t.category}</option>`:''}</select>`}</td>
       <td style="width:110px"><select data-editbiz="${t.id}" style="font-size:12px;padding:5px 8px;max-width:110px">${BIZ.map(b=>`<option ${((t.biz||'Personal')===b)?'selected':''}>${b}</option>`).join('')}</select></td>
       <td class="r amtcell" style="width:100px">${signed(t.amount)}</td>
