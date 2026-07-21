@@ -934,6 +934,7 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
      ALLTAGS=new Set();TXNS.forEach(t=>(t.tags||[]).forEach(x=>ALLTAGS.add(x)));
      buildVendorCat();
      // adopt hand-added rows (e.g. Apple Card) that have no matching Tiller account
+     const MANUAL_BEGIN={'apple card':-10783.96};
      TXNS.forEach(t=>{
        const k=String(t.account_key||'').trim();
        if(k&&acctByKey[k]){t.account_key=k;return;}
@@ -943,7 +944,7 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
        if(!acctByKey[key]){
          const isCard=/card|credit|visa|amex|mastercard|discover/i.test(nm);
          const a={key:key,name:nm,inst:t._inst||'Manual',group:isCard?'card':'bank',kind:'manual',
-                  begin:0,asOf:'',feed:null,_bal:null,manual:true};
+                  begin:(MANUAL_BEGIN[nm.toLowerCase().trim()]||0),asOf:'',feed:null,_bal:null,manual:true};
          ACCOUNTS.push(a);acctByKey[key]=a;
        }
      });
