@@ -399,6 +399,8 @@ const assetDue=v=>v.history[v.history.length-1][0].slice(0,7)!==new Date().toISO
 const valuationsDue=()=>VALUED.filter(assetDue).length;
 const isSplit=t=>!!(SPLITS[t.id]&&SPLITS[t.id].length);
 const isCategorized=t=>!!(t.transfer||t.category||isSplit(t));
+const REVIEW_DAYS=60;
+function needsReview(t){if(t.reviewed||isSplit(t))return false;if(!t.category&&!t.transfer)return true;const d=t.seenAt?new Date(t.seenAt):null;if(!d||isNaN(d))return false;return (Date.now()-d.getTime())/86400000<=REVIEW_DAYS;}
 const todayISO=()=>new Date().toISOString().slice(0,10);
 const slugKey=n=>(n||'asset').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,24)+'-'+Math.random().toString(36).slice(2,6);
 function netWorth(){let assets=0,liab=0;ACCOUNTS.forEach(a=>{const b=acctBalance(a);if(b>=0)assets+=b;else liab+=b;});VALUED.forEach(v=>assets+=valAsset(v));return{assets,liab,net:assets+liab};}
@@ -631,7 +633,7 @@ function openSplitModal(id){
 }
 
 function vNewActivity(){
-  const isNew=t=>new Date(t.seenAt)>watermark && !t.reviewed;
+  const isNew=needsReview;
   const groups={};
   TXNS.forEach(t=>{if(!isNew(t))return;const key=t.source+'@'+t.seenAt;(groups[key]=groups[key]||{source:t.source,seenAt:t.seenAt,txns:[]}).txns.push(t);});
   const batches=Object.values(groups).sort((a,b)=>new Date(b.seenAt)-new Date(a.seenAt));
@@ -911,17 +913,22 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
        if(String(c['Type']||'').toLowerCase()==='transfer')TRANSFER_CATS.add(name);});
      // ---- accounts (kind/group + authoritative Tiller balance) ----
      ACCOUNTS.length=0;
+     const FORCE_LIAB=['first community'];
      (acc||[]).forEach(a=>{const id=a['Account Id'];if(!id)return;
        const type=String(a['Type']||'').toUpperCase();
+       const nm=String(a['Account']||'');
        const cls=String(a['Class']||a['Class (BH)']||'').toLowerCase();
+       const loanLike=type.indexOf('MORTGAGE')>=0||type.indexOf('LOAN')>=0||type.indexOf('INSTALLMENT')>=0||type.indexOf('LINE OF CREDIT')>=0||/loan|installment|line of credit|mortgage/i.test(nm)||FORCE_LIAB.some(s=>nm.toLowerCase().includes(s));
+       const isCredit=type==='CREDIT';
+       const liability=(cls==='liability')||loanLike||isCredit;
        let group='bank',kind='cash';
-       if(type==='CREDIT'){group='card';kind='card';}
-       else if(type.indexOf('MORTGAGE')>=0||type.indexOf('LOAN')>=0){group='loan';kind='loan';}
+       if(isCredit){group='card';kind='card';}
+       else if(loanLike){group='loan';kind='loan';}
        else if(type.indexOf('INVEST')>=0||type.indexOf('BROKER')>=0||type.indexOf('IRA')>=0||type.indexOf('401')>=0||type.indexOf('RETIRE')>=0){group='invest';kind='invest';}
-       else if(cls==='liability'){group='loan';kind='loan';}
+       else if(liability){group='loan';kind='loan';}
        const raw=Number(a['Last Balance'])||0;
-       const bal=(cls==='liability')?-Math.abs(raw):raw;
-       ACCOUNTS.push({key:id,name:a['Account']||id,inst:a['Institution']||'',group:group,kind:kind,
+       const bal=liability?-Math.abs(raw):raw;
+       ACCOUNTS.push({key:id,name:nm||id,inst:a['Institution']||'',group:group,kind:kind,
          begin:0,asOf:String(a['Last Update']||'').slice(0,10),feed:bal,_bal:bal});});
      Object.keys(acctByKey).forEach(k=>delete acctByKey[k]);ACCOUNTS.forEach(a=>acctByKey[a.key]=a);
      // ---- transactions ----
@@ -929,7 +936,7 @@ function saveNewRule(pattern,cat){ const P=pattern.toUpperCase();RULES.push({pat
        date:String(r['Date']).slice(0,10),account_key:r['Account ID'],desc:r['Description']||'',
        amount:Number(r['Amount'])||0,source:r['Source']||'Tiller',
        seenAt:String(r['Date Added']||r['Date']||'').slice(0,19),
-       category:c,transfer:TRANSFER_CATS.has(c),manualCat:!!c,reviewed:(!!c||String(r['Reviewed']||'').toLowerCase()==='yes'),
+       category:c,transfer:TRANSFER_CATS.has(c),manualCat:!!c,reviewed:(String(r['Reviewed']||'').toLowerCase()==='yes'),
        biz:(r['Business']||'Personal'),tags:String(r['Tags']||'').split(',').map(x=>x.trim()).filter(Boolean),_acct:String(r['Account']||'').trim(),_inst:String(r['Institution']||'').trim()};});
      ALLTAGS=new Set();TXNS.forEach(t=>(t.tags||[]).forEach(x=>ALLTAGS.add(x)));
      buildVendorCat();
@@ -1109,10 +1116,12 @@ function openBillModal(bill,isNew){
     <div class="fr"><div class="fld"><label>Expected amount</label><input type="number" id="bfExp" value="${b.expected}" style="text-align:right"></div><div class="fld" style="max-width:110px"><label>Due day</label><input type="number" id="bfDay" value="${b.day}" min="1" max="31" style="text-align:right"></div></div>
     <div class="fr"><div class="fld"><label>Account</label><select id="bfAcct">${acctOpts}</select></div><div class="fld"><label>Category</label><select id="bfCat">${catOpts}</select></div></div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px">The match is a keyword the app looks for in each transaction's description to know this bill was paid. Keep it short and distinctive.</div>
-    <div style="display:flex;gap:8px;margin-top:6px"><div style="flex:1"></div><button class="btn brass" id="bfSave">${isNew?'Add bill':'Save'}</button></div>
+    <div style="display:flex;gap:8px;margin-top:6px;align-items:center">${(!isNew&&b.key)?`<button class="btn" id="bfDel" style="color:var(--outflow);border-color:var(--outflow)">Delete bill</button>`:''}<div style="flex:1"></div><button class="btn brass" id="bfSave">${isNew?'Add bill':'Save'}</button></div>
   </div></div></div>`;
   const close=()=>document.getElementById('modalHost').innerHTML='';
   document.getElementById('mx').onclick=close;document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')close();};
+  const del=document.getElementById('bfDel');
+  if(del)del.onclick=()=>{if(!confirm('Delete the bill "'+b.name+'"? This stops tracking it; your transactions are untouched.'))return;BILLS=BILLS.filter(x=>x.key!==b.key);if(CONFIG.API_URL)api('deleteBill',{key:b.key}).catch(e=>console.error('bill del',e));close();window.draw();};
   document.getElementById('bfSave').onclick=()=>{
     const name=(document.getElementById('bfName').value||'').trim();
     const match=(document.getElementById('bfMatch').value||'').trim().toLowerCase();
@@ -1141,7 +1150,7 @@ const VIEWS=[
   {id:'prop',label:'Property & Assets',sec:'Setup',crumb:'Setup',month:false,render:vProperty},
 ];
 let active='dash';
-function newCount(){let n=0;TXNS.forEach(t=>{if(new Date(t.seenAt)>watermark&&!t.reviewed)n++;});return n;}
+function newCount(){let n=0;TXNS.forEach(t=>{if(needsReview(t))n++;});return n;}
 function renderNav(){
   const secs=[...new Set(VIEWS.map(v=>v.sec))];
   document.getElementById('nav').innerHTML=secs.map(sec=>`<div class="navsec">${sec}</div>`+VIEWS.filter(v=>v.sec===sec).map(v=>`<button class="nav-item ${v.id===active?'active':''}" data-id="${v.id}">${v.label}${v.badge&&newCount()?`<span class="badge">${newCount()}</span>`:''}${v.id==='prop'&&valuationsDue()?`<span class="badge">${valuationsDue()}</span>`:''}</button>`).join('')).join('');
